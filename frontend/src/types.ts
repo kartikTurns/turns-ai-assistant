@@ -28,6 +28,7 @@ export interface ToolUse {
   input: any;
   result?: any;
   error?: string;
+  status?: 'executing' | 'completed' | 'error';
 }
 
 export interface MCPTool {

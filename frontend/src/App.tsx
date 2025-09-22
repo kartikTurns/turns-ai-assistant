@@ -117,6 +117,7 @@ function App() {
                   id: data.id,
                   name: data.name,
                   input: data.input,
+                  status: data.status || 'executing',
                 };
                 currentToolUses.push(toolUse);
                 
@@ -127,38 +128,58 @@ function App() {
                     : msg
                 );
                 updateConversation(conversationId, currentMessages);
+              } else if (data.type === 'tool_complete') {
+                // Update tool use with result or error
+                currentToolUses = currentToolUses.map(tool =>
+                  tool.id === data.id
+                    ? {
+                        ...tool,
+                        result: data.result || undefined,
+                        error: data.error || undefined,
+                        status: data.status
+                      }
+                    : tool
+                );
+
+                currentMessages = currentMessages.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, toolUses: [...currentToolUses] }
+                    : msg
+                );
+                updateConversation(conversationId, currentMessages);
               } else if (data.type === 'tool_result') {
-                // Update tool use with result
-                currentToolUses = currentToolUses.map(tool => 
-                  tool.id === data.tool_use_id 
+                // Legacy support - Update tool use with result
+                currentToolUses = currentToolUses.map(tool =>
+                  tool.id === data.tool_use_id
                     ? { ...tool, result: JSON.parse(data.content) }
                     : tool
                 );
-                
-                currentMessages = currentMessages.map(msg => 
-                  msg.id === assistantMessageId 
+
+                currentMessages = currentMessages.map(msg =>
+                  msg.id === assistantMessageId
                     ? { ...msg, toolUses: [...currentToolUses] }
                     : msg
                 );
                 updateConversation(conversationId, currentMessages);
               } else if (data.type === 'tool_error') {
-                // Update tool use with error
-                currentToolUses = currentToolUses.map(tool => 
-                  tool.id === data.tool_use_id 
+                // Legacy support - Update tool use with error
+                currentToolUses = currentToolUses.map(tool =>
+                  tool.id === data.tool_use_id
                     ? { ...tool, error: data.error }
                     : tool
                 );
-                
-                currentMessages = currentMessages.map(msg => 
-                  msg.id === assistantMessageId 
+
+                currentMessages = currentMessages.map(msg =>
+                  msg.id === assistantMessageId
                     ? { ...msg, toolUses: [...currentToolUses] }
                     : msg
                 );
                 updateConversation(conversationId, currentMessages);
               } else if (data.type === 'done') {
-                currentMessages = currentMessages.map(msg => 
-                  msg.id === data.id 
-                    ? { ...msg, content: data.message, toolUses: currentToolUses }
+                // Just mark as done, don't modify content since it's already set
+                currentMessages = currentMessages.map(msg =>
+                  msg.id === data.id
+                    ? { ...msg, toolUses: currentToolUses }
                     : msg
                 );
                 updateConversation(conversationId, currentMessages);

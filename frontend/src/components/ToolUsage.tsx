@@ -427,8 +427,8 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
 
   // Determine status
   const getStatus = (): 'running' | 'completed' | 'failed' => {
-    if (toolUse.error) return 'failed';
-    if (toolUse.result) return 'completed';
+    if (toolUse.status === 'error' || toolUse.error) return 'failed';
+    if (toolUse.status === 'completed' || toolUse.result) return 'completed';
     return 'running';
   };
 
@@ -450,10 +450,8 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
             </svg>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-medium text-purple-900 text-sm">
-              Tool:
-            </span>
-            <span className="font-mono text-purple-700 text-sm">{toolUse.name}</span>
+            <span className="text-lg">🔧</span>
+            <span className="font-mono text-purple-700 text-sm font-medium">{toolUse.name}</span>
           </div>
         </div>
         
