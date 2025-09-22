@@ -414,7 +414,7 @@ function formatToolResult(result: any, toolName?: string): React.ReactNode {
 
 export default function ToolUsage({ toolUse }: ToolUsageProps) {
   const [showRaw, setShowRaw] = React.useState(false);
-  const [isExpanded, setIsExpanded] = React.useState(true);
+  const [isExpanded, setIsExpanded] = React.useState(false);
   const [startTime] = React.useState(() => Date.now());
   const [executionTime, setExecutionTime] = React.useState<number | undefined>();
 
@@ -461,7 +461,8 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
         />
       </div>
       
-      <div className={`transition-all duration-200 overflow-hidden ${isExpanded ? 'max-h-none opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
+      {isExpanded && (
+        <div className="transition-all duration-200 mt-4">
         <div className="text-sm space-y-4">
           {/* Input Section */}
           <div>
@@ -530,7 +531,8 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
             </div>
           )}
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
