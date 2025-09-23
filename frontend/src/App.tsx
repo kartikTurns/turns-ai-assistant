@@ -7,6 +7,11 @@ import type { Message, ChatResponse, ToolUse } from './types';
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);
+  // Load collapsed state from localStorage, default to false (expanded)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved ? JSON.parse(saved) : false;
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const {
@@ -21,6 +26,11 @@ function App() {
 
   const currentConversation = getCurrentConversation();
   const messages = currentConversation?.messages || [];
+
+  // Save collapsed state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', JSON.stringify(isSidebarCollapsed));
+  }, [isSidebarCollapsed]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -214,11 +224,13 @@ function App() {
         onSelectConversation={selectConversation}
         onNewConversation={createNewConversation}
         onDeleteConversation={deleteConversation}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Messages */}
+        {/* Messages - No header needed since sidebar is always visible */}
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
