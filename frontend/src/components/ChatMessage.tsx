@@ -55,6 +55,15 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             </span>
           </div>
           
+          {/* Show tool usage BEFORE assistant message content */}
+          {!isUser && message.toolUses && message.toolUses.length > 0 && (
+            <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {message.toolUses.map((toolUse) => (
+                <ToolUsage key={toolUse.id} toolUse={toolUse} />
+              ))}
+            </div>
+          )}
+
           <div style={{
             fontSize: '14px',
             lineHeight: '1.6',
@@ -64,15 +73,6 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           }}>
             {message.content}
           </div>
-          
-          {/* Show tool usage for assistant messages */}
-          {!isUser && message.toolUses && message.toolUses.length > 0 && (
-            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {message.toolUses.map((toolUse) => (
-                <ToolUsage key={toolUse.id} toolUse={toolUse} />
-              ))}
-            </div>
-          )}
         </div>
       </div>
     </div>
