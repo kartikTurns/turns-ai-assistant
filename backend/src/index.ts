@@ -3,11 +3,12 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import Anthropic from '@anthropic-ai/sdk';
 import { mcpService } from './mcpService';
-import { 
-  TOOL_CONFIG, 
-  shouldUseToolsForMessage, 
-  generateSystemPrompt 
+import {
+  TOOL_CONFIG,
+  shouldUseToolsForMessage,
+  generateSystemPrompt
 } from './config/toolConfig';
+import { generateFallbackContext, getBusinessRecommendations } from './utils/businessKnowledge';
 
 dotenv.config();
 
@@ -162,9 +163,12 @@ async function handleConversationWithTools(
 
   while (!conversationComplete && currentIteration < maxIterations) {
     currentIteration++;
-    
-    if (TOOL_CONFIG.LOGGING.VERBOSE) {
-      console.log(`Iteration ${currentIteration}/${maxIterations}`);
+
+    if (TOOL_CONFIG.LOGGING.VERBOSE || TOOL_CONFIG.LOGGING.LOG_MULTI_TOOL_REASONING) {
+      console.log(`🔄 Starting iteration ${currentIteration}/${maxIterations} for multi-tool workflow`);
+      if (currentIteration > 1) {
+        console.log(`📋 Previous iterations have executed tools, continuing reasoning chain...`);
+      }
     }
 
     // Validate messages have content
@@ -194,11 +198,12 @@ async function handleConversationWithTools(
       createParams.temperature = TOOL_CONFIG.AI_SETTINGS.TEMPERATURE;
     }
 
-    // Only add tools on first iteration if we determined they're needed
-    if (mcpTools.length > 0 && currentIteration === 1) {
+    // Provide tools on all iterations if they were determined to be needed
+    // This allows Claude to continue using tools throughout the conversation
+    if (mcpTools.length > 0) {
       createParams.tools = mcpTools;
       if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
-        console.log(`Providing ${mcpTools.length} tools to Claude`);
+        console.log(`Providing ${mcpTools.length} tools to Claude (iteration ${currentIteration})`);
       }
     }
 
@@ -289,10 +294,52 @@ async function handleConversationWithTools(
           res.write(`data: ${JSON.stringify(toolCompleteData)}\n\n`);
 
           assistantContent.push(content);
+          // Analyze tool result quality and add context for fallback reasoning
+          let enhancedResult = toolResult;
+
+          // Check if result is empty, null, or insufficient
+          const isEmpty = !toolResult ||
+            (Array.isArray(toolResult) && toolResult.length === 0) ||
+            (typeof toolResult === 'object' && Object.keys(toolResult).length === 0) ||
+            (typeof toolResult === 'string' && toolResult.trim().length === 0);
+
+          const isMinimal = Array.isArray(toolResult) && toolResult.length < 3;
+
+          if (isEmpty) {
+            const businessContext = TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT
+              ? generateFallbackContext(content.name, content.input, 'empty')
+              : '';
+
+            const recommendations = TOOL_CONFIG.FALLBACK.SUGGEST_ALTERNATIVES
+              ? getBusinessRecommendations(content.name)
+              : [];
+
+            enhancedResult = {
+              original_result: toolResult,
+              data_quality: 'empty',
+              fallback_guidance: `The ${content.name} tool returned no data. ${businessContext} Please provide expert insights about what this might mean and offer business recommendations despite the lack of data.`,
+              suggested_reasoning: `Consider typical laundromat operations, seasonal patterns, or industry benchmarks that might apply to this scenario.`,
+              business_context: businessContext,
+              recommendations: recommendations.length > 0 ? recommendations : undefined
+            };
+          } else if (isMinimal) {
+            const businessContext = TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT
+              ? generateFallbackContext(content.name, content.input, 'limited')
+              : '';
+
+            enhancedResult = {
+              original_result: toolResult,
+              data_quality: 'limited',
+              fallback_guidance: `The ${content.name} tool returned minimal data. Extract maximum value from these results and supplement with business reasoning and industry knowledge.`,
+              data_enhancement_suggestions: 'Consider what additional context or calculations could make this data more valuable.',
+              business_context: businessContext
+            };
+          }
+
           toolResults.push({
             type: 'tool_result',
             tool_use_id: content.id,
-            content: JSON.stringify(toolResult)
+            content: JSON.stringify(enhancedResult)
           });
 
         } catch (toolError) {
@@ -315,10 +362,30 @@ async function handleConversationWithTools(
           res.write(`data: ${JSON.stringify(toolErrorData)}\n\n`);
 
           assistantContent.push(content);
+
+          // Enhanced error context for intelligent fallback
+          const businessContext = TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT
+            ? generateFallbackContext(content.name, content.input, 'failed')
+            : '';
+
+          const recommendations = TOOL_CONFIG.FALLBACK.SUGGEST_ALTERNATIVES
+            ? getBusinessRecommendations(content.name)
+            : [];
+
+          const errorContext = {
+            tool_name: content.name,
+            tool_input: content.input,
+            error_message: toolError instanceof Error ? toolError.message : 'Tool execution failed',
+            fallback_guidance: `The ${content.name} tool failed. Please provide an expert-level response using business reasoning and industry knowledge. Acknowledge the data limitation and offer valuable insights despite the tool failure.`,
+            business_context: businessContext,
+            recommendations: recommendations.length > 0 ? recommendations : undefined,
+            data_quality: 'failed'
+          };
+
           toolResults.push({
             type: 'tool_result',
             tool_use_id: content.id,
-            content: `Error: ${toolError instanceof Error ? toolError.message : 'Tool execution failed'}`
+            content: JSON.stringify(errorContext)
           });
         }
       }
@@ -347,17 +414,108 @@ async function handleConversationWithTools(
         yearContext = ` The user asked about ${yearMatch[1]}.`;
       }
 
-      // Add a prompt to encourage Claude to interpret the results
+      // Enhanced prompt with intelligent fallback guidance
+      const hasFailedTools = toolResults.some(tr => {
+        try {
+          const parsed = JSON.parse(tr.content);
+          return parsed.error_message || parsed.fallback_guidance;
+        } catch {
+          return tr.content && tr.content.includes('Error:');
+        }
+      });
+
+      const successfulToolCount = toolResults.length - (hasFailedTools ? toolResults.filter(tr => {
+        try {
+          const parsed = JSON.parse(tr.content);
+          return parsed.error_message || parsed.fallback_guidance;
+        } catch {
+          return tr.content && tr.content.includes('Error:');
+        }
+      }).length : 0);
+
+      let continuePrompt;
+      if (currentIteration < maxIterations - 1) {
+        if (hasFailedTools && successfulToolCount === 0) {
+          // All tools failed - focus on expert reasoning
+          continuePrompt = `All tools failed to retrieve data. Please provide an expert-level response using your business knowledge and industry expertise. Apply contextual reasoning about laundromat operations, typical business patterns, and actionable insights. Be transparent about data limitations while delivering maximum value through professional analysis.${yearContext}
+
+Original request: "${originalUserMessage}"
+
+Focus on: Business logic, industry benchmarks, operational insights, and practical recommendations.`;
+        } else if (hasFailedTools) {
+          // Some tools failed - combine available data with reasoning
+          continuePrompt = `Some tools succeeded while others failed. Analyze the available data and determine if you need additional information or if you can provide a comprehensive answer using the retrieved data combined with business reasoning. If more tools might help, try them. Otherwise, provide expert insights combining data and professional knowledge.${yearContext}
+
+Original request: "${originalUserMessage}"
+
+Remember: Use both data-driven insights and business expertise to deliver comprehensive value.`;
+        } else {
+          // Normal multi-tool continuation
+          continuePrompt = `Based on the data retrieved, analyze if you need additional information to provide a complete answer. If so, use more tools to gather that data. If you have enough information, provide a comprehensive summary and analysis.${yearContext}
+
+Original request: "${originalUserMessage}"
+
+Remember: You can call more tools if needed to provide better insights, comparisons, or context.`;
+        }
+      } else {
+        // Final iteration - synthesize everything
+        if (hasFailedTools && successfulToolCount === 0) {
+          continuePrompt = `Provide your best expert-level response using business knowledge and reasoning, clearly acknowledging the data limitations.${yearContext} Original request: "${originalUserMessage}"`;
+        } else {
+          continuePrompt = `Based on all available information (both data and any limitations encountered), provide a comprehensive, expert-level analysis and recommendations.${yearContext} Original request: "${originalUserMessage}"`;
+        }
+      }
+
       messagesToSend.push({
         role: 'user',
-        content: `Based on the data retrieved, please provide a clear and helpful summary.${yearContext} Original request: "${originalUserMessage}"`
+        content: continuePrompt
       });
     } else {
       conversationComplete = true;
     }
 
-    if (TOOL_CONFIG.LOGGING.VERBOSE) {
-      console.log(`Iteration ${currentIteration} complete: hasToolUse=${hasToolUse}, conversationComplete=${conversationComplete}`);
+    if (TOOL_CONFIG.LOGGING.VERBOSE || TOOL_CONFIG.LOGGING.LOG_MULTI_TOOL_REASONING) {
+      console.log(`✅ Iteration ${currentIteration} complete: hasToolUse=${hasToolUse}, conversationComplete=${conversationComplete}, toolsExecuted=${toolResults.length}`);
+      if (hasToolUse) {
+        const toolSummary = toolResults.map(tr => {
+          try {
+            const parsed = tr.content ? JSON.parse(tr.content) : tr;
+            if (parsed.data_quality) {
+              return { tool: 'unknown', quality: parsed.data_quality, hasData: parsed.original_result ? 'yes' : 'no' };
+            }
+            if (parsed.error_message) {
+              return { tool: parsed.tool_name, status: 'failed', error: parsed.error_message };
+            }
+            return { tool: 'unknown', status: 'success', hasData: 'yes' };
+          } catch {
+            return { tool: 'unknown', status: 'unknown' };
+          }
+        });
+
+        console.log(`🔧 Tools executed in iteration ${currentIteration}:`, toolSummary);
+
+        // Log fallback scenarios
+        const failedTools = toolSummary.filter(t => t.status === 'failed').length;
+        const emptyResults = toolSummary.filter(t => t.quality === 'empty').length;
+        const limitedResults = toolSummary.filter(t => t.quality === 'limited').length;
+
+        if (failedTools > 0 || emptyResults > 0 || limitedResults > 0) {
+          if (TOOL_CONFIG.LOGGING.LOG_FALLBACK_SCENARIOS) {
+            console.log(`🚨 Fallback scenarios detected: ${failedTools} failed, ${emptyResults} empty, ${limitedResults} limited`);
+            console.log(`🧠 Claude will use intelligent fallback reasoning for comprehensive response`);
+            if (TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT) {
+              console.log(`📊 Business context and industry knowledge will be applied`);
+            }
+            if (TOOL_CONFIG.FALLBACK.SUGGEST_ALTERNATIVES) {
+              console.log(`💡 Alternative recommendations will be provided`);
+            }
+          }
+        }
+
+        if (!conversationComplete && currentIteration < maxIterations) {
+          console.log(`🤔 Claude will now analyze results and decide if more tools are needed...`);
+        }
+      }
     }
   }
 
