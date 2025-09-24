@@ -6,7 +6,9 @@ import { mcpService } from './mcpService';
 import {
   TOOL_CONFIG,
   shouldUseToolsForMessage,
-  generateSystemPrompt
+  getQueryMode,
+  generateSystemPrompt,
+  filterToolResultForSimpleMode
 } from './config/toolConfig';
 import { generateFallbackContext, getBusinessRecommendations } from './utils/businessKnowledge';
 
@@ -143,12 +145,14 @@ async function handleConversationWithTools(
   const originalUserMessage = message;
   console.log(originalUserMessage);
   // process.exit(0);
-  // Use config to determine if we should provide tools
+  // Use config to determine if we should provide tools and what mode to use
   const shouldProvideTools = shouldUseToolsForMessage(originalUserMessage);
-  
+  const queryMode = getQueryMode(originalUserMessage);
+
   if (TOOL_CONFIG.LOGGING.VERBOSE) {
     console.log(`Message: "${originalUserMessage}"`);
     console.log(`Should use tools: ${shouldProvideTools}`);
+    console.log(`Query mode: ${queryMode}`);
   }
 
   // Add MCP tools only if needed
@@ -156,10 +160,11 @@ async function handleConversationWithTools(
 
   let conversationComplete = false;
   let currentIteration = 0;
-  const maxIterations = TOOL_CONFIG.AI_SETTINGS.MAX_ITERATIONS;
+  // Adjust max iterations based on query mode
+  const maxIterations = queryMode === 'simple' ? 2 : TOOL_CONFIG.AI_SETTINGS.MAX_ITERATIONS;
 
-  // Generate system prompt using config
-  const systemPrompt = generateSystemPrompt(new Date(), mcpTools.map(t => t.name));
+  // Generate system prompt using config and query mode
+  const systemPrompt = generateSystemPrompt(new Date(), mcpTools.map(t => t.name), queryMode);
 
   while (!conversationComplete && currentIteration < maxIterations) {
     currentIteration++;
@@ -295,45 +300,68 @@ async function handleConversationWithTools(
 
           assistantContent.push(content);
           // Analyze tool result quality and add context for fallback reasoning
-          let enhancedResult = toolResult;
 
-          // Check if result is empty, null, or insufficient
-          const isEmpty = !toolResult ||
-            (Array.isArray(toolResult) && toolResult.length === 0) ||
-            (typeof toolResult === 'object' && Object.keys(toolResult).length === 0) ||
-            (typeof toolResult === 'string' && toolResult.trim().length === 0);
+          // Apply data filtering for simple queries to reduce data sent to Claude
+          let enhancedResult = queryMode === 'simple'
+            ? filterToolResultForSimpleMode(content.name, toolResult, originalUserMessage)
+            : toolResult;
 
-          const isMinimal = Array.isArray(toolResult) && toolResult.length < 3;
+          // Check if result is empty, null, or insufficient (use the filtered result for simple mode)
+          const resultToCheck = queryMode === 'simple' ? enhancedResult : toolResult;
+          const isEmpty = !resultToCheck ||
+            (Array.isArray(resultToCheck) && resultToCheck.length === 0) ||
+            (typeof resultToCheck === 'object' && Object.keys(resultToCheck).length === 0) ||
+            (typeof resultToCheck === 'string' && resultToCheck.trim().length === 0);
+
+          const isMinimal = Array.isArray(resultToCheck) && resultToCheck.length < 3;
 
           if (isEmpty) {
-            const businessContext = TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT
+            const businessContext = (TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT && queryMode === 'analysis')
               ? generateFallbackContext(content.name, content.input, 'empty')
               : '';
 
-            const recommendations = TOOL_CONFIG.FALLBACK.SUGGEST_ALTERNATIVES
+            const recommendations = (TOOL_CONFIG.FALLBACK.SUGGEST_ALTERNATIVES && queryMode === 'analysis')
               ? getBusinessRecommendations(content.name)
               : [];
 
-            enhancedResult = {
-              original_result: toolResult,
-              data_quality: 'empty',
-              fallback_guidance: `The ${content.name} tool returned no data. ${businessContext} Please provide expert insights about what this might mean and offer business recommendations despite the lack of data.`,
-              suggested_reasoning: `Consider typical laundromat operations, seasonal patterns, or industry benchmarks that might apply to this scenario.`,
-              business_context: businessContext,
-              recommendations: recommendations.length > 0 ? recommendations : undefined
-            };
+            if (queryMode === 'simple') {
+              enhancedResult = {
+                original_result: toolResult,
+                data_quality: 'empty',
+                fallback_guidance: `The ${content.name} tool returned no data. Acknowledge this limitation and provide a direct response.`,
+                simple_mode: true
+              };
+            } else {
+              enhancedResult = {
+                original_result: toolResult,
+                data_quality: 'empty',
+                fallback_guidance: `The ${content.name} tool returned no data. ${businessContext} Please provide expert insights about what this might mean and offer business recommendations despite the lack of data.`,
+                suggested_reasoning: `Consider typical laundromat operations, seasonal patterns, or industry benchmarks that might apply to this scenario.`,
+                business_context: businessContext,
+                recommendations: recommendations.length > 0 ? recommendations : undefined
+              };
+            }
           } else if (isMinimal) {
-            const businessContext = TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT
+            const businessContext = (TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT && queryMode === 'analysis')
               ? generateFallbackContext(content.name, content.input, 'limited')
               : '';
 
-            enhancedResult = {
-              original_result: toolResult,
-              data_quality: 'limited',
-              fallback_guidance: `The ${content.name} tool returned minimal data. Extract maximum value from these results and supplement with business reasoning and industry knowledge.`,
-              data_enhancement_suggestions: 'Consider what additional context or calculations could make this data more valuable.',
-              business_context: businessContext
-            };
+            if (queryMode === 'simple') {
+              enhancedResult = {
+                original_result: toolResult,
+                data_quality: 'limited',
+                fallback_guidance: `The ${content.name} tool returned minimal data. Present what's available directly.`,
+                simple_mode: true
+              };
+            } else {
+              enhancedResult = {
+                original_result: toolResult,
+                data_quality: 'limited',
+                fallback_guidance: `The ${content.name} tool returned minimal data. Extract maximum value from these results and supplement with business reasoning and industry knowledge.`,
+                data_enhancement_suggestions: 'Consider what additional context or calculations could make this data more valuable.',
+                business_context: businessContext
+              };
+            }
           }
 
           toolResults.push({
@@ -364,15 +392,22 @@ async function handleConversationWithTools(
           assistantContent.push(content);
 
           // Enhanced error context for intelligent fallback
-          const businessContext = TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT
+          const businessContext = (TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT && queryMode === 'analysis')
             ? generateFallbackContext(content.name, content.input, 'failed')
             : '';
 
-          const recommendations = TOOL_CONFIG.FALLBACK.SUGGEST_ALTERNATIVES
+          const recommendations = (TOOL_CONFIG.FALLBACK.SUGGEST_ALTERNATIVES && queryMode === 'analysis')
             ? getBusinessRecommendations(content.name)
             : [];
 
-          const errorContext = {
+          const errorContext = queryMode === 'simple' ? {
+            tool_name: content.name,
+            tool_input: content.input,
+            error_message: toolError instanceof Error ? toolError.message : 'Tool execution failed',
+            fallback_guidance: `The ${content.name} tool failed. Acknowledge the failure and provide a direct response that data is unavailable.`,
+            data_quality: 'failed',
+            simple_mode: true
+          } : {
             tool_name: content.name,
             tool_input: content.input,
             error_message: toolError instanceof Error ? toolError.message : 'Tool execution failed',
@@ -434,35 +469,47 @@ async function handleConversationWithTools(
       }).length : 0);
 
       let continuePrompt;
-      if (currentIteration < maxIterations - 1) {
+      if (queryMode === 'simple') {
+        // Simple mode: minimal continuation prompts
         if (hasFailedTools && successfulToolCount === 0) {
-          // All tools failed - focus on expert reasoning
-          continuePrompt = `All tools failed to retrieve data. Please provide an expert-level response using your business knowledge and industry expertise. Apply contextual reasoning about laundromat operations, typical business patterns, and actionable insights. Be transparent about data limitations while delivering maximum value through professional analysis.${yearContext}
+          continuePrompt = `Tools failed. Provide a direct answer acknowledging data unavailability.${yearContext} Original request: "${originalUserMessage}"`;
+        } else if (hasFailedTools) {
+          continuePrompt = `Use available data to provide a direct answer to: "${originalUserMessage}"${yearContext}`;
+        } else {
+          continuePrompt = `Provide the requested data directly without additional analysis.${yearContext} Original request: "${originalUserMessage}"`;
+        }
+      } else {
+        // Analysis mode: comprehensive continuation prompts
+        if (currentIteration < maxIterations - 1) {
+          if (hasFailedTools && successfulToolCount === 0) {
+            // All tools failed - focus on expert reasoning
+            continuePrompt = `All tools failed to retrieve data. Please provide an expert-level response using your business knowledge and industry expertise. Apply contextual reasoning about laundromat operations, typical business patterns, and actionable insights. Be transparent about data limitations while delivering maximum value through professional analysis.${yearContext}
 
 Original request: "${originalUserMessage}"
 
 Focus on: Business logic, industry benchmarks, operational insights, and practical recommendations.`;
-        } else if (hasFailedTools) {
-          // Some tools failed - combine available data with reasoning
-          continuePrompt = `Some tools succeeded while others failed. Analyze the available data and determine if you need additional information or if you can provide a comprehensive answer using the retrieved data combined with business reasoning. If more tools might help, try them. Otherwise, provide expert insights combining data and professional knowledge.${yearContext}
+          } else if (hasFailedTools) {
+            // Some tools failed - combine available data with reasoning
+            continuePrompt = `Some tools succeeded while others failed. Analyze the available data and determine if you need additional information or if you can provide a comprehensive answer using the retrieved data combined with business reasoning. If more tools might help, try them. Otherwise, provide expert insights combining data and professional knowledge.${yearContext}
 
 Original request: "${originalUserMessage}"
 
 Remember: Use both data-driven insights and business expertise to deliver comprehensive value.`;
-        } else {
-          // Normal multi-tool continuation
-          continuePrompt = `Based on the data retrieved, analyze if you need additional information to provide a complete answer. If so, use more tools to gather that data. If you have enough information, provide a comprehensive summary and analysis.${yearContext}
+          } else {
+            // Normal multi-tool continuation
+            continuePrompt = `Based on the data retrieved, analyze if you need additional information to provide a complete answer. If so, use more tools to gather that data. If you have enough information, provide a comprehensive summary and analysis.${yearContext}
 
 Original request: "${originalUserMessage}"
 
 Remember: You can call more tools if needed to provide better insights, comparisons, or context.`;
-        }
-      } else {
-        // Final iteration - synthesize everything
-        if (hasFailedTools && successfulToolCount === 0) {
-          continuePrompt = `Provide your best expert-level response using business knowledge and reasoning, clearly acknowledging the data limitations.${yearContext} Original request: "${originalUserMessage}"`;
+          }
         } else {
-          continuePrompt = `Based on all available information (both data and any limitations encountered), provide a comprehensive, expert-level analysis and recommendations.${yearContext} Original request: "${originalUserMessage}"`;
+          // Final iteration - synthesize everything
+          if (hasFailedTools && successfulToolCount === 0) {
+            continuePrompt = `Provide your best expert-level response using business knowledge and reasoning, clearly acknowledging the data limitations.${yearContext} Original request: "${originalUserMessage}"`;
+          } else {
+            continuePrompt = `Based on all available information (both data and any limitations encountered), provide a comprehensive, expert-level analysis and recommendations.${yearContext} Original request: "${originalUserMessage}"`;
+          }
         }
       }
 
@@ -475,7 +522,7 @@ Remember: You can call more tools if needed to provide better insights, comparis
     }
 
     if (TOOL_CONFIG.LOGGING.VERBOSE || TOOL_CONFIG.LOGGING.LOG_MULTI_TOOL_REASONING) {
-      console.log(`✅ Iteration ${currentIteration} complete: hasToolUse=${hasToolUse}, conversationComplete=${conversationComplete}, toolsExecuted=${toolResults.length}`);
+      console.log(`✅ Iteration ${currentIteration} complete (${queryMode} mode): hasToolUse=${hasToolUse}, conversationComplete=${conversationComplete}, toolsExecuted=${toolResults.length}`);
       if (hasToolUse) {
         const toolSummary = toolResults.map(tr => {
           try {

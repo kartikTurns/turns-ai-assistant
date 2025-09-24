@@ -1,5 +1,5 @@
 // Business Knowledge and Industry Insights for Intelligent Fallback Responses
-
+//buisnnessKnowledge.ts
 export interface BusinessInsight {
   category: string;
   insight: string;

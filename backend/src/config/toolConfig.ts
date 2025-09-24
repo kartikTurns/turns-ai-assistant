@@ -1,21 +1,27 @@
 // backend/src/config/toolConfig.ts
-// Simplified configuration - let Claude be smart
+// Configuration with Simple vs Analysis mode support
 
 export const TOOL_CONFIG = {
-  // Keywords that definitely need data - enhanced for multi-tool scenarios
+  // Basic data keywords that require tools
   DATA_KEYWORDS: [
     'customer', 'revenue', 'sales', 'order', 'pickup', 'delivery',
     'metric', 'report', 'data', 'total', 'count', 'how many',
-    'show me', 'get', 'fetch', 'analyze', 'summary', 'breakdown',
+    'show me', 'get', 'fetch', 'list', 'find',
     'service', 'item', 'laundry', 'business', 'transaction',
     'inventory', 'performance', 'statistics', 'earnings',
-    // Multi-tool workflow keywords
-    'compare', 'comparison', 'trend', 'trending', 'growth', 'change',
-    'vs', 'versus', 'against', 'better', 'worse', 'best', 'worst',
-    'overview', 'dashboard', 'insights', 'analysis', 'detailed',
-    'comprehensive', 'complete', 'full picture', 'breakdown',
     'this month', 'last month', 'this year', 'last year',
     'recent', 'lately', 'currently', 'now', 'today'
+  ],
+
+  // Keywords that indicate complex analysis mode
+  ANALYSIS_KEYWORDS: [
+    'analyze', 'analysis', 'summary', 'breakdown', 'insights',
+    'compare', 'comparison', 'trend', 'trending', 'growth', 'change',
+    'vs', 'versus', 'against', 'better', 'worse', 'best', 'worst',
+    'overview', 'dashboard', 'detailed', 'comprehensive', 'complete',
+    'full picture', 'explain', 'why', 'what does this mean',
+    'interpret', 'evaluation', 'assessment', 'deep dive',
+    'performance review', 'business intelligence'
   ],
 
   // Only obvious non-data conversations
@@ -36,7 +42,7 @@ export const TOOL_CONFIG = {
   AI_SETTINGS: {
     MODEL: 'claude-3-haiku-20240307',
     MAX_TOKENS: 3072,  // Increased for complex multi-tool responses
-    MAX_ITERATIONS: 8,  // Allow more iterations for sophisticated tool chaining
+    MAX_ITERATIONS: 4,  // Allow more iterations for sophisticated tool chaining
     TEMPERATURE: 0.2,   // Lower temperature for consistent reasoning and data handling
   },
 
@@ -66,30 +72,110 @@ export const TOOL_CONFIG = {
   },
 };
 
-// Simplified check - just basic filtering
+// Query classification: determine if tools are needed and what mode to use
 export function shouldUseToolsForMessage(message: string): boolean {
   const lowerMessage = message.toLowerCase().trim();
-  
+
   // Quick exclude check
   if (TOOL_CONFIG.EXCLUDE_KEYWORDS.some(kw => lowerMessage === kw || lowerMessage === kw + '!')) {
     return false;
   }
-  
+
   // Check if message contains any data-related keywords
-  return TOOL_CONFIG.DATA_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
+  return TOOL_CONFIG.DATA_KEYWORDS.some(keyword => lowerMessage.includes(keyword)) ||
+         TOOL_CONFIG.ANALYSIS_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
 }
 
-// Enhanced system prompt for intelligent multi-tool chaining
-export function generateSystemPrompt(date: Date = new Date(), tools: string[] = []): string {
+// Determine query mode: 'simple' or 'analysis'
+export function getQueryMode(message: string): 'simple' | 'analysis' {
+  const lowerMessage = message.toLowerCase().trim();
+
+  // Check for analysis keywords first
+  const hasAnalysisKeywords = TOOL_CONFIG.ANALYSIS_KEYWORDS.some(keyword =>
+    lowerMessage.includes(keyword)
+  );
+
+  // Check for explicit simple patterns
+  const simplePatterns = [
+    /^(get|show|list|find|give me)\s+.*\d+\s+(customers?|orders?|sales?)/, // "get first 10 customers"
+    /^how many\s+/, // "how many customers"
+    /^(count|total)\s+/, // "count customers"
+    /^(what is|what's)\s+.*\s+(count|total|number)/, // "what is the total count"
+    /^(show me|list)\s+[^,]*$/, // Simple show/list without commas (no complex params)
+  ];
+
+  const isSimplePattern = simplePatterns.some(pattern => pattern.test(lowerMessage));
+
+  // Return analysis mode if explicit analysis keywords found
+  if (hasAnalysisKeywords) {
+    return 'analysis';
+  }
+
+  // Return simple mode if matches simple patterns
+  if (isSimplePattern) {
+    return 'simple';
+  }
+
+  // Default to simple for basic data requests
+  return 'simple';
+}
+
+// Generate system prompt based on query mode
+export function generateSystemPrompt(date: Date = new Date(), tools: string[] = [], mode: 'simple' | 'analysis' = 'simple'): string {
   const dateStr = date.toISOString().split('T')[0];
   const year = date.getFullYear();
   const month = date.toISOString().substring(0, 7); // YYYY-MM format
 
-  return `You are an intelligent AI assistant for a laundromat management system. Today is ${dateStr}.
+  const basePrompt = `You are an AI assistant for a laundromat management system. Today is ${dateStr}.\nAvailable tools: ${tools.join(', ')}`;
+
+  if (mode === 'simple') {
+    return `${basePrompt}
+
+SIMPLE MODE - Direct Data Retrieval:
+You are in SIMPLE MODE. The user has asked for straightforward data retrieval.
+
+Guidelines:
+1. MINIMAL TOOL USAGE:
+   - Call ONLY the minimum required tool(s) to answer the question
+   - Do NOT call multiple tools unless absolutely necessary
+   - Do NOT add unnecessary filters or parameters unless explicitly requested
+
+2. DIRECT RESPONSES:
+   - Provide minimal context with the data (e.g., "You have 364 customers" not just "364")
+   - Do NOT add analysis, insights, or recommendations unless asked
+   - Keep responses concise and to-the-point
+   - Use natural, conversational phrasing for single values
+   - Format data clearly but don't over-explain
+
+3. NO ASSUMPTIONS:
+   - Do NOT add date filters unless the user specifies them
+   - Do NOT provide "comprehensive" analysis unless requested
+   - Do NOT call tools for context that wasn't asked for
+
+4. EXAMPLES:
+   - "how many customers" → call get_customer_count once, return "You have 364 customers"
+   - "show me first 10 customers" → call get_customers with limit=10, return clean customer list
+   - "total revenue" → call get_revenue once, return "Total revenue: $X"
+
+5. DATA PROCESSING:
+   - Extract only relevant information from tool responses
+   - For count queries: focus on the count/total numbers
+   - For list queries: show only essential fields (name, ID, key details)
+   - Ignore verbose metadata, internal IDs, and unused fields
+
+FALLBACK (if tools fail):
+- Still keep responses minimal and direct
+- Acknowledge data limitation briefly
+- Don't add business analysis unless user asks for it
+
+Remember: Be direct, minimal, and literal. Answer exactly what was asked, nothing more.`;
+  } else {
+    return `${basePrompt}
+
+ANALYSIS MODE - Comprehensive Intelligence:
+You are in ANALYSIS MODE. The user wants detailed analysis and insights.
 
 MULTI-TOOL REASONING FRAMEWORK:
-When answering complex questions, think strategically about which tools to use and in what order:
-
 1. ANALYZE THE REQUEST:
    - Break down complex questions into component data needs
    - Identify all data points required for a complete answer
@@ -99,7 +185,7 @@ When answering complex questions, think strategically about which tools to use a
    - Start with foundational data (totals, counts, overviews)
    - Then drill down into specifics (breakdowns, details, comparisons)
    - Use results from earlier tools to inform parameters for later tools
-   - Call the same tool multiple times with different parameters if needed
+   - Call multiple tools to build comprehensive insights
 
 3. COMPREHENSIVE DATA GATHERING:
    - For comparative questions: get data for all time periods being compared
@@ -116,53 +202,97 @@ When answering complex questions, think strategically about which tools to use a
 5. SYNTHESIS APPROACH:
    - Don't stop after one tool call if more data would improve the answer
    - Cross-reference data between tools to find insights
-   - Calculate derived metrics when possible (growth rates, percentages, ratios)
-   - Present findings in a logical, structured way
-
-EXAMPLES OF MULTI-TOOL WORKFLOWS:
-- "How is business performing?" → Get revenue, customer count, order volume, then compare to previous periods
-- "Show me trends" → Get data for multiple time periods, calculate changes, identify patterns
-- "What's our best service?" → Get service data, revenue by service, customer feedback, combine insights
-- "Compare this month to last month" → Get data for both periods, calculate differences and percentages
-
-Available tools: ${tools.join(', ')}
+   - Calculate derived metrics (growth rates, percentages, ratios)
+   - Present findings with analysis and recommendations
 
 INTELLIGENT FALLBACK STRATEGY:
-When tools fail or return limited data, provide expert-level responses using:
+When tools fail or return limited data, provide expert-level responses using industry knowledge, business logic, and contextual reasoning.
 
-1. CONTEXTUAL REASONING:
-   - Apply industry knowledge about laundromat operations
-   - Use business logic and common patterns
-   - Reference typical seasonal trends and operational factors
-   - Provide educated estimates based on industry benchmarks
+Remember: Provide comprehensive, insightful answers by strategically using multiple tools and deep analysis.`;
+  }
+}
 
-2. PARTIAL DATA UTILIZATION:
-   - Extract maximum value from any available data
-   - Combine partial results with reasonable assumptions
-   - Clearly indicate which parts are data-driven vs. reasoned
-   - Provide confidence levels for different insights
+// Filter tool results for simple queries to reduce data sent to Claude
+export function filterToolResultForSimpleMode(toolName: string, result: any, originalQuery: string): any {
+  if (!result) return result;
 
-3. EXPERT INSIGHTS:
-   - Offer business recommendations even without complete data
-   - Suggest what metrics to track for better insights
-   - Identify potential causes for data unavailability
-   - Provide actionable next steps regardless of data gaps
+  try {
+    // Handle MCP tool result structure: result.content[0].text contains the JSON
+    let data;
+    if (result.content && result.content[0] && result.content[0].text) {
+      data = JSON.parse(result.content[0].text);
+    } else if (typeof result === 'string') {
+      data = JSON.parse(result);
+    } else {
+      data = result;
+    }
 
-4. TRANSPARENCY INDICATORS:
-   Use clear language when data is limited:
-   - "Based on available data..." (when partial data exists)
-   - "Industry analysis suggests..." (when using domain knowledge)
-   - "Typical patterns indicate..." (when applying business logic)
-   - "While I couldn't retrieve complete data, here's what we can deduce..."
+    // For customer count queries
+    if (toolName === 'get_customer_count' && originalQuery.toLowerCase().includes('how many')) {
+      const filteredData = {
+        total_count: data.total_count || data.count,
+        message: data.message || `Total customers: ${data.total_count || data.count}`
+      };
 
-FALLBACK RESPONSE FRAMEWORK:
-- Always acknowledge what data was/wasn't available
-- Provide value through reasoning and business expertise
-- Suggest ways to improve data collection
-- Offer practical recommendations despite limitations
-- Maintain professional, expert-level insights throughout
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(filteredData)
+        }]
+      };
+    }
 
-Remember: Your goal is to provide comprehensive, insightful answers by strategically using multiple tools. When tools fail or data is limited, leverage business expertise and contextual reasoning to still deliver maximum value. Never leave users empty-handed.`;
+    // For customer list queries
+    if (toolName === 'get_customers' && data.data && Array.isArray(data.data)) {
+      const filteredCustomers = data.data.map((customer: any) => ({
+        id: customer.id,
+        first_name: customer.first_name,
+        last_name: customer.last_name,
+        email_id: customer.email_id,
+        mobile: customer.mobile,
+        join_date: customer.join_date,
+        store_name: customer.store_name
+      }));
+
+      const filteredData = {
+        customers: filteredCustomers,
+        total_showing: data.summary?.showing || filteredCustomers.length,
+        message: `Showing ${filteredCustomers.length} customers`
+      };
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(filteredData)
+        }]
+      };
+    }
+
+    // For other count/total queries
+    if (toolName.includes('count') || originalQuery.toLowerCase().includes('total')) {
+      // Extract key count/total fields
+      const filtered: any = {};
+      Object.keys(data).forEach(key => {
+        if (key.includes('count') || key.includes('total') || key === 'message' || key === 'success') {
+          filtered[key] = data[key];
+        }
+      });
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(filtered)
+        }]
+      };
+    }
+
+    // Return original data for non-simple cases or when filtering doesn't apply
+    return result;
+
+  } catch (error) {
+    // If parsing fails, return original result
+    return result;
+  }
 }
 
 export default TOOL_CONFIG;
