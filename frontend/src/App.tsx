@@ -10,6 +10,7 @@ import {
   loadAuthParamsFromStorage,
   type AuthParams
 } from './utils/urlParams';
+import { frontendAuthService } from './services/authService';
 import type { Message, ChatResponse, ToolUse } from './types';
 
 function App() {
@@ -38,8 +39,37 @@ function App() {
   const currentConversation = getCurrentConversation();
   const messages = currentConversation?.messages || [];
 
-  // Extract auth parameters from URL on mount
+  // Extract auth parameters from URL on mount, validate them, and redirect if invalid
   useEffect(() => {
+    const validateAuthParams = async (authParams: AuthParams) => {
+      if (!authParams.accessToken || !authParams.businessId) {
+        console.log('No authentication parameters found, redirecting to admin portal');
+        window.location.href = frontendAuthService.getRedirectUrl();
+        return;
+      }
+
+      try {
+        console.log('Validating authentication parameters with API...');
+        const authResult = await frontendAuthService.validateAuth(
+          authParams.accessToken,
+          authParams.businessId
+        );
+
+        if (!authResult.status) {
+          console.log('Authentication validation failed:', authResult.message);
+          console.log('Redirecting to admin portal');
+          window.location.href = frontendAuthService.getRedirectUrl();
+          return;
+        }
+
+        console.log('Authentication validation successful');
+      } catch (error) {
+        console.error('Error validating authentication:', error);
+        console.log('Authentication validation error, redirecting to admin portal');
+        window.location.href = frontendAuthService.getRedirectUrl();
+      }
+    };
+
     const urlAuthParams = getAuthParamsFromUrl();
     if (urlAuthParams.accessToken && urlAuthParams.businessId) {
       setAuthParams(urlAuthParams);
@@ -51,14 +81,26 @@ function App() {
         hasAccessToken: !!urlAuthParams.accessToken,
         businessId: urlAuthParams.businessId
       });
+
+      // Validate the auth parameters immediately
+      validateAuthParams(urlAuthParams);
     } else {
-      // Check if we have stored auth params and log their status
+      // Check if we have stored auth params
       const storedAuthParams = loadAuthParamsFromStorage();
       if (storedAuthParams.accessToken && storedAuthParams.businessId) {
         console.log('Using stored auth parameters from localStorage:', {
           hasAccessToken: !!storedAuthParams.accessToken,
           businessId: storedAuthParams.businessId
         });
+        setAuthParams(storedAuthParams);
+
+        // Validate the stored auth parameters
+        validateAuthParams(storedAuthParams);
+      } else {
+        // No auth parameters found - redirect to admin portal
+        console.log('No authentication parameters found, redirecting to admin portal');
+        window.location.href = frontendAuthService.getRedirectUrl();
+        return;
       }
     }
   }, []);
