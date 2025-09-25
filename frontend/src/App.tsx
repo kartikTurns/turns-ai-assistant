@@ -152,6 +152,9 @@ function App() {
       if (authParams.businessId) {
         requestHeaders['X-Business-Id'] = authParams.businessId;
       }
+      if (authParams.refreshToken) {
+        requestHeaders['X-Refresh-Token'] = authParams.refreshToken;
+      }
 
       const response = await fetch('http://localhost:5000/api/chat', {
         method: 'POST',
@@ -183,9 +186,65 @@ function App() {
         throw new Error('Failed to get response');
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response body');
+      // Check if this is a token refresh response
+      let reader: ReadableStreamDefaultReader<Uint8Array>;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const responseData = await response.clone().json();
+        if (responseData.tokenRefreshed && responseData.newAccessToken) {
+          console.log('Token was refreshed, updating localStorage with new access token');
+
+          // Update authParams state with new token
+          const updatedAuthParams = {
+            ...authParams,
+            accessToken: responseData.newAccessToken
+          };
+          setAuthParams(updatedAuthParams);
+
+          // Save updated auth params to localStorage
+          saveAuthParamsToStorage(updatedAuthParams);
+
+          console.log('New access token saved to localStorage');
+
+          // Now retry the original request with the new token
+          const retryHeaders = { ...requestHeaders };
+          retryHeaders['X-Access-Token'] = responseData.newAccessToken;
+
+          const retryResponse = await fetch('http://localhost:5000/api/chat', {
+            method: 'POST',
+            headers: retryHeaders,
+            body: JSON.stringify({
+              message: content,
+              messages: messagesWithUser
+            }),
+          });
+
+          if (!retryResponse.ok) {
+            throw new Error('Failed to get response after token refresh');
+          }
+
+          // Use the retry response for processing
+          const retryReader = retryResponse.body?.getReader();
+          if (!retryReader) {
+            throw new Error('No response body after token refresh');
+          }
+
+          reader = retryReader;
+        } else {
+          // Not a token refresh response, use original response
+          const originalReader = response.body?.getReader();
+          if (!originalReader) {
+            throw new Error('No response body');
+          }
+          reader = originalReader;
+        }
+      } else {
+        // Not JSON response, use original response
+        const originalReader = response.body?.getReader();
+        if (!originalReader) {
+          throw new Error('No response body');
+        }
+        reader = originalReader;
       }
 
       let assistantMessageId = '';

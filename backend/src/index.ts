@@ -37,7 +37,7 @@ const anthropic = new Anthropic({
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'], // Allow multiple frontend ports
   credentials: true,
-  allowedHeaders: ['Content-Type', 'X-Access-Token', 'X-Business-Id']
+  allowedHeaders: ['Content-Type', 'X-Access-Token', 'X-Business-Id', 'X-Refresh-Token']
 }));
 app.use(express.json());
 
@@ -81,11 +81,12 @@ app.post('/api/chat', async (req, res) => {
   // Extract auth parameters from headers
   const access_token = req.headers['x-access-token'] as string;
   const business_id = req.headers['x-business-id'] as string;
+  const refresh_token = req.headers['x-refresh-token'] as string;
 
   if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
     console.log('Received message:', message);
     console.log('Conversation history length:', conversationHistory ? conversationHistory.length : 0);
-    console.log('Auth headers - Access token:', !!access_token, 'Business ID:', business_id);
+    console.log('Auth headers - Access token:', !!access_token, 'Business ID:', business_id, 'Refresh token:', !!refresh_token);
   }
 
   // Check if auth parameters are provided
@@ -104,18 +105,49 @@ app.post('/api/chat', async (req, res) => {
 
     if (!authResult.status) {
       console.log('Backend: Authentication failed:', authResult.message);
-      return res.status(401).json({
-        error: 'Authentication failed',
-        message: authResult.message,
-        redirect: authService.getRedirectUrl(),
-        requiresRedirect: true,
-        authData: {
-          status: authResult.status,
-          data: authResult.data,
-          meta: authResult.meta,
-          validation_error: authResult.validation_error
+
+      // If access token expired and we have refresh token, try to refresh
+      if (refresh_token && authResult.message && authResult.message.includes('expired')) {
+        console.log('Backend: Access token expired, attempting to refresh...');
+
+        const refreshResult = await authService.refreshAccessToken(refresh_token, business_id);
+
+        if (refreshResult.status && refreshResult.data?.access_token) {
+          console.log('Backend: Token refresh successful, new token obtained');
+          // Return the new access token to frontend
+          return res.status(200).json({
+            success: true,
+            message: 'Token refreshed successfully',
+            tokenRefreshed: true,
+            newAccessToken: refreshResult.data.access_token,
+            refreshData: refreshResult
+          });
+        } else {
+          console.log('Backend: Token refresh failed:', refreshResult.message);
+          // Refresh failed, redirect to login
+          return res.status(401).json({
+            error: 'Token refresh failed',
+            message: refreshResult.message || 'Unable to refresh token',
+            redirect: authService.getRedirectUrl(),
+            requiresRedirect: true,
+            refreshFailed: true
+          });
         }
-      });
+      } else {
+        // No refresh token or not an expiry error, return auth failure
+        return res.status(401).json({
+          error: 'Authentication failed',
+          message: authResult.message,
+          redirect: authService.getRedirectUrl(),
+          requiresRedirect: true,
+          authData: {
+            status: authResult.status,
+            data: authResult.data,
+            meta: authResult.meta,
+            validation_error: authResult.validation_error
+          }
+        });
+      }
     }
 
     console.log('Backend: Authentication successful for business:', business_id);
