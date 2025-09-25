@@ -44,6 +44,7 @@ export const TOOL_CONFIG = {
     MAX_TOKENS: 3072,  // Increased for complex multi-tool responses
     MAX_ITERATIONS: 4,  // Allow more iterations for sophisticated tool chaining
     TEMPERATURE: 0.2,   // Lower temperature for consistent reasoning and data handling
+    CONTEXT_MESSAGE_LIMIT: 5,  // Only send last 5 messages as context (10 total with user/assistant pairs)
   },
 
   UI: {

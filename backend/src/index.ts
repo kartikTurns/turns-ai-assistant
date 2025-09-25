@@ -209,12 +209,20 @@ async function handleConversationWithTools(
   }
 
   let messagesToSend: ClaudeMessage[] = [];
-  // Add conversation history if provided
+  // Add conversation history if provided, but limit to recent messages
   if (conversationHistory && Array.isArray(conversationHistory)) {
-    messagesToSend = conversationHistory.map((msg: any) => ({
+    // Limit conversation history to the last N messages to keep context focused
+    const messageLimit = TOOL_CONFIG.AI_SETTINGS.CONTEXT_MESSAGE_LIMIT * 2; // x2 for user+assistant pairs
+    const recentHistory = conversationHistory.slice(-messageLimit);
+
+    messagesToSend = recentHistory.map((msg: any) => ({
       role: msg.role as 'user' | 'assistant',
       content: msg.content,
     }));
+
+    if (TOOL_CONFIG.LOGGING.VERBOSE || TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
+      console.log(`Context: Using ${recentHistory.length} recent messages from ${conversationHistory.length} total messages`);
+    }
   }
 
   // Add current message if not already in history
