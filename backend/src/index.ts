@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import Anthropic from '@anthropic-ai/sdk';
 import { mcpService } from './mcpService';
+import { authService } from './authService';
 import {
   TOOL_CONFIG,
   shouldUseToolsForMessage,
@@ -80,13 +81,54 @@ app.post('/api/chat', async (req, res) => {
   // Extract auth parameters from headers
   const access_token = req.headers['x-access-token'] as string;
   const business_id = req.headers['x-business-id'] as string;
-  
+
   if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
     console.log('Received message:', message);
     console.log('Conversation history length:', conversationHistory ? conversationHistory.length : 0);
     console.log('Auth headers - Access token:', !!access_token, 'Business ID:', business_id);
   }
-  
+
+  // Check if auth parameters are provided
+  if (!access_token || !business_id) {
+    return res.status(401).json({
+      error: 'Authentication required',
+      message: 'Access token and business ID are required',
+      redirect: authService.getRedirectUrl(),
+      requiresRedirect: true
+    });
+  }
+
+  // Validate authentication with external API
+  try {
+    const authResult = await authService.validateAuth(access_token, business_id);
+
+    if (!authResult.status) {
+      console.log('Backend: Authentication failed:', authResult.message);
+      return res.status(401).json({
+        error: 'Authentication failed',
+        message: authResult.message,
+        redirect: authService.getRedirectUrl(),
+        requiresRedirect: true,
+        authData: {
+          status: authResult.status,
+          data: authResult.data,
+          meta: authResult.meta,
+          validation_error: authResult.validation_error
+        }
+      });
+    }
+
+    console.log('Backend: Authentication successful for business:', business_id);
+  } catch (error) {
+    console.error('Backend: Authentication error:', error);
+    return res.status(500).json({
+      error: 'Authentication system error',
+      message: 'Unable to validate authentication',
+      redirect: authService.getRedirectUrl(),
+      requiresRedirect: true
+    });
+  }
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({
       error: 'ANTHROPIC_API_KEY not configured'

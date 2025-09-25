@@ -79,7 +79,8 @@ function App() {
       cleanAuthParamsFromUrl();
       console.log('Auth parameters extracted from URL and saved to localStorage:', {
         hasAccessToken: !!urlAuthParams.accessToken,
-        businessId: urlAuthParams.businessId
+        businessId: urlAuthParams.businessId,
+        hasRefreshToken: !!urlAuthParams.refreshToken
       });
 
       // Validate the auth parameters immediately
@@ -90,7 +91,8 @@ function App() {
       if (storedAuthParams.accessToken && storedAuthParams.businessId) {
         console.log('Using stored auth parameters from localStorage:', {
           hasAccessToken: !!storedAuthParams.accessToken,
-          businessId: storedAuthParams.businessId
+          businessId: storedAuthParams.businessId,
+          hasRefreshToken: !!storedAuthParams.refreshToken
         });
         setAuthParams(storedAuthParams);
 
@@ -161,6 +163,23 @@ function App() {
       });
 
       if (!response.ok) {
+        // Handle authentication errors specifically
+        if (response.status === 401) {
+          try {
+            const errorData = await response.json();
+            console.log('Authentication failed from backend:', errorData);
+            if (errorData.requiresRedirect && errorData.redirect) {
+              console.log('Token expired or invalid, redirecting to:', errorData.redirect);
+              window.location.href = errorData.redirect;
+              return;
+            }
+          } catch (e) {
+            // If we can't parse the error, still redirect on 401
+            console.log('Authentication failed, redirecting to admin portal');
+            window.location.href = 'https://admin.turnsapp.com/';
+            return;
+          }
+        }
         throw new Error('Failed to get response');
       }
 

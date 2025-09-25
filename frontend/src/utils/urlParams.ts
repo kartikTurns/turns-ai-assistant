@@ -5,6 +5,7 @@ const AUTH_STORAGE_KEY = 'claude-auth-params';
 export interface AuthParams {
   accessToken?: string;
   businessId?: string;
+  refreshToken?: string;
 }
 
 /**
@@ -17,6 +18,7 @@ export function getAuthParamsFromUrl(): AuthParams {
     accessToken: params.get('access_token') || undefined,
     // Handle both business_id and buisness_id (typo from user's example)
     businessId: params.get('business_id') || params.get('buisness_id') || undefined,
+    refreshToken: params.get('refresh_token') || undefined,
   };
 }
 
@@ -36,6 +38,7 @@ export function cleanAuthParamsFromUrl(): void {
   url.searchParams.delete('access_token');
   url.searchParams.delete('business_id');
   url.searchParams.delete('buisness_id'); // Handle typo variant
+  url.searchParams.delete('refresh_token');
 
   // Update URL without reload
   window.history.replaceState({}, document.title, url.toString());
