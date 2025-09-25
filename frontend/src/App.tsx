@@ -3,10 +3,21 @@ import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import Sidebar from './components/Sidebar';
 import { useConversations } from './hooks/useConversations';
+import {
+  getAuthParamsFromUrl,
+  cleanAuthParamsFromUrl,
+  saveAuthParamsToStorage,
+  loadAuthParamsFromStorage,
+  type AuthParams
+} from './utils/urlParams';
 import type { Message, ChatResponse, ToolUse } from './types';
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);
+  const [authParams, setAuthParams] = useState<AuthParams>(() => {
+    // Initialize auth params from localStorage on app start
+    return loadAuthParamsFromStorage();
+  });
   // Load collapsed state from localStorage, default to false (expanded)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
@@ -26,6 +37,31 @@ function App() {
 
   const currentConversation = getCurrentConversation();
   const messages = currentConversation?.messages || [];
+
+  // Extract auth parameters from URL on mount
+  useEffect(() => {
+    const urlAuthParams = getAuthParamsFromUrl();
+    if (urlAuthParams.accessToken && urlAuthParams.businessId) {
+      setAuthParams(urlAuthParams);
+      // Save to localStorage for persistence
+      saveAuthParamsToStorage(urlAuthParams);
+      // Clean URL parameters after extracting them
+      cleanAuthParamsFromUrl();
+      console.log('Auth parameters extracted from URL and saved to localStorage:', {
+        hasAccessToken: !!urlAuthParams.accessToken,
+        businessId: urlAuthParams.businessId
+      });
+    } else {
+      // Check if we have stored auth params and log their status
+      const storedAuthParams = loadAuthParamsFromStorage();
+      if (storedAuthParams.accessToken && storedAuthParams.businessId) {
+        console.log('Using stored auth parameters from localStorage:', {
+          hasAccessToken: !!storedAuthParams.accessToken,
+          businessId: storedAuthParams.businessId
+        });
+      }
+    }
+  }, []);
 
   // Save collapsed state to localStorage whenever it changes
   useEffect(() => {
@@ -60,12 +96,23 @@ function App() {
     setIsLoading(true);
 
     try {
+      // Prepare headers with auth parameters
+      const requestHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add auth headers if available
+      if (authParams.accessToken) {
+        requestHeaders['X-Access-Token'] = authParams.accessToken;
+      }
+      if (authParams.businessId) {
+        requestHeaders['X-Business-Id'] = authParams.businessId;
+      }
+
       const response = await fetch('http://localhost:5000/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
+        headers: requestHeaders,
+        body: JSON.stringify({
           message: content,
           messages: messagesWithUser
         }),
@@ -236,7 +283,19 @@ function App() {
             <div className="flex items-center justify-center h-full">
               <div className="text-center px-4">
                 <h1 className="text-2xl font-medium text-gray-900 mb-2">Welcome to Claude</h1>
-                <p className="text-sm text-gray-600">How can I help you today?</p>
+                <p className="text-sm text-gray-600 mb-3">How can I help you today?</p>
+                {authParams.accessToken && authParams.businessId && (
+                  <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                    Authenticated as {authParams.businessId}
+                  </div>
+                )}
+                {(!authParams.accessToken || !authParams.businessId) && (
+                  <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full mr-2"></div>
+                    No authentication
+                  </div>
+                )}
               </div>
             </div>
           ) : (

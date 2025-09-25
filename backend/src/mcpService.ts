@@ -11,6 +11,11 @@ interface MCPToolCall {
   arguments: any;
 }
 
+interface MCPHeaders {
+  accessToken?: string;
+  businessId?: string;
+}
+
 class MCPService {
   private tools: MCPTool[] = [];
   private isConnected = false;
@@ -112,7 +117,7 @@ class MCPService {
     }
   }
 
-  async executeToolCall(serverUrl: string, toolCall: MCPToolCall): Promise<any> {
+  async executeToolCall(serverUrl: string, toolCall: MCPToolCall, headers?: MCPHeaders): Promise<any> {
     // Check connection health periodically
     if (Date.now() - this.lastHealthCheck > this.healthCheckInterval) {
       await this.checkHealth();
@@ -133,11 +138,21 @@ class MCPService {
       return cached.result;
     }
 
+    const requestHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Add MCP authentication headers if provided
+    if (headers?.accessToken) {
+      requestHeaders['x-mcp-apikey'] = headers.accessToken;
+    }
+    if (headers?.businessId) {
+      requestHeaders['x-mcp-username'] = headers.businessId;
+    }
+
     const payload = {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: requestHeaders,
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: Date.now().toString(), // Use string ID with timestamp
@@ -149,9 +164,12 @@ class MCPService {
       }),
       signal: AbortSignal.timeout(30000), // 30 second timeout for tool execution
     };
-
+    console.log('Tool call payload:', payload);
     try {
       console.log(`Calling tool: ${toolCall.name} with args:`, toolCall.arguments);
+      if (headers?.accessToken || headers?.businessId) {
+        console.log(`MCP Headers: x-mcp-apikey=${!!headers?.accessToken}, x-mcp-username=${headers?.businessId}`);
+      }
       const response = await fetch(`${serverUrl}/tools/call`, payload);
       
       if (response.ok) {
@@ -293,4 +311,4 @@ class MCPService {
 }
 
 export const mcpService = new MCPService();
-export type { MCPTool, MCPToolCall };
+export type { MCPTool, MCPToolCall, MCPHeaders };

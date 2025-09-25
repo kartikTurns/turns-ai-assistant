@@ -33,7 +33,11 @@ const anthropic = new Anthropic({
   }
 })();
 
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'], // Allow multiple frontend ports
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'X-Access-Token', 'X-Business-Id']
+}));
 app.use(express.json());
 
 app.get('/health', (req, res) => {
@@ -72,10 +76,15 @@ app.get('/api/config', (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
   const { message, messages: conversationHistory } = req.body;
+
+  // Extract auth parameters from headers
+  const access_token = req.headers['x-access-token'] as string;
+  const business_id = req.headers['x-business-id'] as string;
   
   if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
     console.log('Received message:', message);
     console.log('Conversation history length:', conversationHistory ? conversationHistory.length : 0);
+    console.log('Auth headers - Access token:', !!access_token, 'Business ID:', business_id);
   }
   
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -90,13 +99,13 @@ app.post('/api/chat', async (req, res) => {
       'Content-Type': 'text/plain',
       'Transfer-Encoding': 'chunked',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Access-Token, X-Business-Id',
     });
 
     const messageId = Date.now().toString();
     const timestamp = new Date().toISOString();
 
-    await handleConversationWithTools(message, conversationHistory, res, messageId, timestamp);
+    await handleConversationWithTools(message, conversationHistory, res, messageId, timestamp, access_token, business_id);
 
   } catch (error) {
     console.error('Error calling Claude API:', error);
@@ -115,7 +124,9 @@ async function handleConversationWithTools(
   conversationHistory: any[],
   res: express.Response,
   messageId: string,
-  timestamp: string
+  timestamp: string,
+  accessToken?: string,
+  businessId?: string
 ) {
   // Prepare messages for Claude API
   interface ClaudeMessage {
@@ -271,6 +282,9 @@ async function handleConversationWithTools(
           const toolResult = await mcpService.executeToolCall(MCP_SERVER_URL, {
             name: content.name,
             arguments: content.input,
+          }, {
+            accessToken,
+            businessId
           });
           const toolExecutionTime = Date.now() - toolStartTime;
 
