@@ -11,7 +11,7 @@ import {
   type AuthParams
 } from './utils/urlParams';
 import { frontendAuthService } from './services/authService';
-import type { Message, ChatResponse, ToolUse } from './types';
+import type { Message, ToolUse } from './types';
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);

@@ -619,7 +619,6 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [startTime] = React.useState(() => Date.now());
   const [executionTime, setExecutionTime] = React.useState<number | undefined>();
-  const [isHover, setIsHover] = React.useState(false);
   const [rawButtonHover, setRawButtonHover] = React.useState(false);
 
   // Calculate execution time when tool completes
@@ -652,8 +651,8 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
           userSelect: 'none'
         }}
         onClick={() => setIsExpanded(!isExpanded)}
-        onMouseEnter={() => setIsHover(true)}
-        onMouseLeave={() => setIsHover(false)}
+        onMouseEnter={() => {}}
+        onMouseLeave={() => {}}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
