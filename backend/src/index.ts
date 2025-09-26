@@ -35,7 +35,7 @@ const anthropic = new Anthropic({
 })();
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'], // Allow multiple frontend ports
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'https://my-project-omega-orpin.vercel.app'], // Allow multiple frontend ports
   credentials: true,
   allowedHeaders: ['Content-Type', 'X-Access-Token', 'X-Business-Id', 'X-Refresh-Token']
 }));
