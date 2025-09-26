@@ -156,7 +156,7 @@ function App() {
         requestHeaders['X-Refresh-Token'] = authParams.refreshToken;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/chat`, {
+      const response = await fetch(`https://turns-ai-assistant-production.up.railway.app/api/chat`, {
         method: 'POST',
         headers: requestHeaders,
         body: JSON.stringify({
@@ -210,7 +210,7 @@ function App() {
           const retryHeaders = { ...requestHeaders };
           retryHeaders['X-Access-Token'] = responseData.newAccessToken;
 
-          const retryResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/chat`, {
+          const retryResponse = await fetch(`https://turns-ai-assistant-production.up.railway.app/api/chat`, {
             method: 'POST',
             headers: retryHeaders,
             body: JSON.stringify({
