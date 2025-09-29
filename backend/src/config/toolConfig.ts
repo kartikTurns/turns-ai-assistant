@@ -2,6 +2,40 @@
 // Configuration with Simple vs Analysis mode support
 
 export const TOOL_CONFIG = {
+  // Smart date detection patterns
+  DATE_PATTERNS: {
+    relative_dates: {
+      'today': { type: 'day', offset: 0 },
+      'yesterday': { type: 'day', offset: -1 },
+      'this week': { type: 'week', offset: 0 },
+      'last week': { type: 'week', offset: -1 },
+      'this month': { type: 'month', offset: 0 },
+      'last month': { type: 'month', offset: -1 },
+      'this year': { type: 'year', offset: 0 },
+      'last year': { type: 'year', offset: -1 },
+      'recent': { type: 'day', offset: -7 }, // Last 7 days
+      'lately': { type: 'day', offset: -14 }, // Last 14 days
+      'currently': { type: 'month', offset: 0 },
+      'now': { type: 'day', offset: 0 }
+    },
+    month_names: {
+      'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+      'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12,
+      'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'jun': 6, 'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+    }
+  },
+
+  // Query categorization patterns
+  QUERY_PATTERNS: {
+    customer: ['customer', 'client', 'user', 'people', 'visitor'],
+    revenue: ['revenue', 'sales', 'income', 'earnings', 'money', 'profit', 'financial'],
+    order: ['order', 'transaction', 'service', 'pickup', 'delivery', 'job'],
+    analytics: ['report', 'analytics', 'metric', 'performance', 'dashboard', 'summary', 'overview'],
+    inventory: ['inventory', 'stock', 'item', 'product', 'supply'],
+    count: ['how many', 'count', 'total', 'number of'],
+    list: ['show me', 'list', 'get', 'fetch', 'find', 'display']
+  },
+
   // Basic data keywords that require tools
   DATA_KEYWORDS: [
     'customer', 'revenue', 'sales', 'order', 'pickup', 'delivery',
@@ -40,11 +74,11 @@ export const TOOL_CONFIG = {
   },
 
   AI_SETTINGS: {
-    MODEL: 'claude-3-haiku-20240307',
-    MAX_TOKENS: 3072,  // Increased for complex multi-tool responses
-    MAX_ITERATIONS: 4,  // Allow more iterations for sophisticated tool chaining
-    TEMPERATURE: 0.2,   // Lower temperature for consistent reasoning and data handling
-    CONTEXT_MESSAGE_LIMIT: 5,  // Only send last 5 messages as context (10 total with user/assistant pairs)
+    MODEL: 'claude-sonnet-4-20250514',
+    MAX_TOKENS: 8192,  // Increased for complex multi-tool responses with Sonnet
+    MAX_ITERATIONS: 6,  // Allow more iterations for sophisticated tool chaining with better model
+    TEMPERATURE: 0.1,   // Lower temperature for consistent reasoning and data handling
+    CONTEXT_MESSAGE_LIMIT: 3,  // More context with better model (16 total with user/assistant pairs)
   },
 
   UI: {
@@ -136,10 +170,11 @@ SIMPLE MODE - Direct Data Retrieval:
 You are in SIMPLE MODE. The user has asked for straightforward data retrieval.
 
 Guidelines:
-1. MINIMAL TOOL USAGE:
+1. SMART TOOL SELECTION:
+   - Use logical reasoning to find the right data source
+   - Revenue/sales/money questions need order/transaction data
+   - Don't say "no tools available" - think about where the data lives
    - Call ONLY the minimum required tool(s) to answer the question
-   - Do NOT call multiple tools unless absolutely necessary
-   - Do NOT add unnecessary filters or parameters unless explicitly requested
 
 2. DIRECT RESPONSES:
    - Provide minimal context with the data (e.g., "You have 364 customers" not just "364")
@@ -176,13 +211,20 @@ Remember: Be direct, minimal, and literal. Answer exactly what was asked, nothin
 ANALYSIS MODE - Comprehensive Intelligence:
 You are in ANALYSIS MODE. The user wants detailed analysis and insights.
 
-MULTI-TOOL REASONING FRAMEWORK:
+INTELLIGENT REASONING FRAMEWORK:
 1. ANALYZE THE REQUEST:
    - Break down complex questions into component data needs
    - Identify all data points required for a complete answer
    - Plan the sequence of tool calls needed
+   - THINK LOGICALLY: Revenue/sales/money data comes from order/transaction data
 
-2. TOOL CHAINING STRATEGY:
+2. SMART TOOL SELECTION:
+   - Don't just look for exact tool name matches
+   - Understand that financial questions need transaction/order data
+   - Business metrics can be calculated from available data sources
+   - Use logical reasoning to map concepts to data sources
+
+3. TOOL CHAINING STRATEGY:
    - Start with foundational data (totals, counts, overviews)
    - Then drill down into specifics (breakdowns, details, comparisons)
    - Use results from earlier tools to inform parameters for later tools
@@ -293,6 +335,270 @@ export function filterToolResultForSimpleMode(toolName: string, result: any, ori
   } catch (error) {
     // If parsing fails, return original result
     return result;
+  }
+}
+
+// Smart tool matching based on query analysis and available MCP tools
+export function smartToolSelection(userQuery: string, availableTools: any[]): string[] {
+  const lowerQuery = userQuery.toLowerCase();
+  const selectedTools: string[] = [];
+  const toolScores: { [toolName: string]: number } = {};
+
+  // Smart relationship detection - understand that financial data comes from transaction data
+  const getRelatedTools = (query: string, tools: any[]) => {
+    const relatedTools: string[] = [];
+
+    // Financial queries should look for transaction/order data
+    const financialTerms = ['revenue', 'sales', 'money', 'income', 'earnings', 'profit', 'financial', 'made', 'earned'];
+    const isFinancialQuery = financialTerms.some(term => query.includes(term));
+
+    if (isFinancialQuery) {
+      // Look for tools that handle transactions, orders, or sales data
+      tools.forEach(tool => {
+        const toolName = tool.name.toLowerCase();
+        const toolDesc = (tool.description || '').toLowerCase();
+
+        if (toolName.includes('order') || toolName.includes('transaction') || toolName.includes('sales') ||
+            toolDesc.includes('order') || toolDesc.includes('transaction') || toolDesc.includes('payment')) {
+          relatedTools.push(tool.name);
+        }
+      });
+    }
+
+    return relatedTools;
+  };
+
+  const relatedTools = getRelatedTools(lowerQuery, availableTools);
+
+  // Score each available tool based on query relevance
+  availableTools.forEach(tool => {
+    let score = 0;
+    const toolName = tool.name.toLowerCase();
+    const toolDesc = (tool.description || '').toLowerCase();
+
+    // Apply intelligent relationship scoring
+    if (relatedTools.includes(tool.name)) {
+      score += 20; // High priority for intelligently detected related tools
+    }
+
+    // Check query patterns against tool names and descriptions
+    Object.entries(TOOL_CONFIG.QUERY_PATTERNS).forEach(([category, patterns]) => {
+      patterns.forEach(pattern => {
+        if (lowerQuery.includes(pattern)) {
+          // Higher score if pattern matches tool name
+          if (toolName.includes(category) || toolName.includes(pattern.replace(' ', '_'))) {
+            score += 10;
+          }
+          // Lower score if pattern matches description
+          if (toolDesc.includes(pattern) || toolDesc.includes(category)) {
+            score += 5;
+          }
+        }
+      });
+    });
+
+    // Boost score for exact keyword matches
+    TOOL_CONFIG.DATA_KEYWORDS.forEach(keyword => {
+      if (lowerQuery.includes(keyword)) {
+        if (toolName.includes(keyword.replace(' ', '_')) || toolDesc.includes(keyword)) {
+          score += 3;
+        }
+      }
+    });
+
+    if (score > 0) {
+      toolScores[tool.name] = score;
+    }
+  });
+
+  // Return top scoring tools, max 3 for efficiency
+  const sortedTools = Object.entries(toolScores)
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 3)
+    .map(([toolName]) => toolName);
+
+  return sortedTools;
+}
+
+// Extract date parameters from user query
+export function extractDateParameters(userQuery: string): any {
+  const lowerQuery = userQuery.toLowerCase();
+  const dateParams: any = {};
+  const currentDate = new Date();
+
+  // Check for relative date patterns
+  Object.entries(TOOL_CONFIG.DATE_PATTERNS.relative_dates).forEach(([phrase, config]) => {
+    if (lowerQuery.includes(phrase)) {
+      const targetDate = new Date(currentDate);
+
+      switch (config.type) {
+        case 'day':
+          targetDate.setDate(currentDate.getDate() + config.offset);
+          dateParams.date = targetDate.toISOString().split('T')[0];
+          break;
+        case 'week':
+          targetDate.setDate(currentDate.getDate() + (config.offset * 7));
+          dateParams.week_start = new Date(targetDate.setDate(targetDate.getDate() - targetDate.getDay())).toISOString().split('T')[0];
+          dateParams.week_end = new Date(targetDate.setDate(targetDate.getDate() + 6)).toISOString().split('T')[0];
+          break;
+        case 'month':
+          targetDate.setMonth(currentDate.getMonth() + config.offset);
+          dateParams.month = targetDate.getMonth() + 1;
+          dateParams.year = targetDate.getFullYear();
+          break;
+        case 'year':
+          targetDate.setFullYear(currentDate.getFullYear() + config.offset);
+          dateParams.year = targetDate.getFullYear();
+          break;
+      }
+    }
+  });
+
+  // Check for specific month names
+  Object.entries(TOOL_CONFIG.DATE_PATTERNS.month_names).forEach(([monthName, monthNum]) => {
+    if (lowerQuery.includes(monthName)) {
+      dateParams.month = monthNum;
+      // Default to current year if not specified
+      if (!dateParams.year) {
+        dateParams.year = currentDate.getFullYear();
+      }
+    }
+  });
+
+  // Extract year if mentioned explicitly
+  const yearMatch = lowerQuery.match(/\b(20\d{2})\b/);
+  if (yearMatch) {
+    dateParams.year = parseInt(yearMatch[1]);
+  }
+
+  return Object.keys(dateParams).length > 0 ? dateParams : null;
+}
+
+// Validate if tool result matches user query intent
+export function validateToolResult(userQuery: string, toolName: string, toolResult: any, dateParams: any): boolean {
+  const lowerQuery = userQuery.toLowerCase();
+
+  try {
+    let data;
+    if (toolResult.content && toolResult.content[0] && toolResult.content[0].text) {
+      data = JSON.parse(toolResult.content[0].text);
+    } else if (typeof toolResult === 'string') {
+      data = JSON.parse(toolResult);
+    } else {
+      data = toolResult;
+    }
+
+    // Check if result is empty or error
+    if (!data || data.error || data.message?.includes('error')) {
+      return false;
+    }
+
+    // Validate date relevance if date params were extracted
+    if (dateParams) {
+      // Check if result data contains date fields matching our parameters
+      const resultStr = JSON.stringify(data).toLowerCase();
+
+      if (dateParams.year && !resultStr.includes(dateParams.year.toString())) {
+        return false;
+      }
+
+      if (dateParams.month) {
+        const monthStr = dateParams.month.toString().padStart(2, '0');
+        if (!resultStr.includes(monthStr) && !resultStr.includes(`month`)) {
+          return false;
+        }
+      }
+    }
+
+    // Validate data type matches query intent
+    if (lowerQuery.includes('how many') || lowerQuery.includes('count')) {
+      // Should have count/total fields
+      const hasCount = data.count || data.total_count || data.total ||
+                      (data.data && Array.isArray(data.data)) ||
+                      typeof data.length === 'number';
+      return hasCount;
+    }
+
+    if (lowerQuery.includes('list') || lowerQuery.includes('show me')) {
+      // Should have array data
+      return data.data && Array.isArray(data.data) && data.data.length > 0;
+    }
+
+    return true;
+
+  } catch (error) {
+    return false;
+  }
+}
+
+// Generate enhanced system prompt with tool guidance
+export function generateEnhancedSystemPrompt(
+  date: Date = new Date(),
+  availableTools: any[] = [],
+  userQuery: string = '',
+  mode: 'simple' | 'analysis' = 'simple'
+): string {
+  const dateStr = date.toISOString().split('T')[0];
+  const year = date.getFullYear();
+  const month = date.toISOString().substring(0, 7);
+
+  const suggestedTools = smartToolSelection(userQuery, availableTools);
+  const dateParams = extractDateParameters(userQuery);
+
+  const basePrompt = `You are an AI assistant for a laundromat management system. Today is ${dateStr}.
+
+AVAILABLE TOOLS: ${availableTools.map(t => `${t.name} - ${t.description}`).join(', ')}
+
+QUERY ANALYSIS:
+User Query: "${userQuery}"
+Suggested Tools: ${suggestedTools.join(', ')}
+${dateParams ? `Detected Date Parameters: ${JSON.stringify(dateParams)}` : 'No specific date parameters detected'}`;
+
+  if (mode === 'simple') {
+    return `${basePrompt}
+
+SIMPLE MODE - Smart Tool Selection:
+
+TOOL SELECTION PRIORITY:
+${suggestedTools.length > 0 ?
+  suggestedTools.map((tool, idx) => `${idx + 1}. ${tool} - Most relevant for this query`).join('\n') :
+  'No specific tools suggested - analyze query and available tools to select most appropriate ones'
+}
+
+DATE PARAMETER INJECTION:
+${dateParams ?
+  `IMPORTANT: Add these date parameters to your tool calls: ${JSON.stringify(dateParams)}` :
+  'No date parameters detected. Use current date context if needed.'
+}
+
+EXECUTION GUIDELINES:
+1. Use ONLY the suggested tools unless absolutely necessary
+2. Apply detected date parameters automatically
+3. Validate results match the user's question intent
+4. Provide direct, minimal responses`;
+
+  } else {
+    return `${basePrompt}
+
+ANALYSIS MODE - Comprehensive Intelligence:
+
+TOOL CHAINING STRATEGY:
+${suggestedTools.length > 0 ?
+  `Primary Tools: ${suggestedTools.join(', ')}\nUse these as starting points, then chain additional tools as needed for comprehensive analysis.` :
+  'Analyze available tools and select appropriate combinations for comprehensive insights.'
+}
+
+SMART DATE HANDLING:
+${dateParams ?
+  `Auto-detected parameters: ${JSON.stringify(dateParams)}\nApply these to all relevant tool calls and consider comparative analysis with other time periods.` :
+  'No specific dates detected. Consider current period analysis and historical comparisons.'
+}
+
+VALIDATION REQUIREMENTS:
+1. Ensure each tool result matches the query intent
+2. Cross-validate data consistency between tools
+3. Retry with different parameters if results seem irrelevant
+4. Provide comprehensive analysis combining all relevant data`;
   }
 }
 

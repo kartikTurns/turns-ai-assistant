@@ -9,7 +9,11 @@ import {
   shouldUseToolsForMessage,
   getQueryMode,
   generateSystemPrompt,
-  filterToolResultForSimpleMode
+  filterToolResultForSimpleMode,
+  smartToolSelection,
+  extractDateParameters,
+  validateToolResult,
+  generateEnhancedSystemPrompt
 } from './config/toolConfig';
 import { generateFallbackContext, getBusinessRecommendations } from './utils/businessKnowledge';
 
@@ -249,8 +253,7 @@ async function handleConversationWithTools(
 
   // Store the original user message for context
   const originalUserMessage = message;
-  console.log(originalUserMessage);
-  // process.exit(0);
+
   // Use config to determine if we should provide tools and what mode to use
   const shouldProvideTools = shouldUseToolsForMessage(originalUserMessage);
   const queryMode = getQueryMode(originalUserMessage);
@@ -269,8 +272,8 @@ async function handleConversationWithTools(
   // Adjust max iterations based on query mode
   const maxIterations = queryMode === 'simple' ? 2 : TOOL_CONFIG.AI_SETTINGS.MAX_ITERATIONS;
 
-  // Generate system prompt using config and query mode
-  const systemPrompt = generateSystemPrompt(new Date(), mcpTools.map(t => t.name), queryMode);
+  // Generate enhanced system prompt using smart tool selection and date detection
+  const systemPrompt = generateEnhancedSystemPrompt(new Date(), mcpTools, originalUserMessage, queryMode);
 
   while (!conversationComplete && currentIteration < maxIterations) {
     currentIteration++;
@@ -387,11 +390,23 @@ async function handleConversationWithTools(
             console.log(`Tool ${content.name} execution time: ${toolExecutionTime}ms`);
           }
 
+          // Validate tool result matches user query intent
+          const dateParams = extractDateParameters(originalUserMessage);
+          const isValidResult = validateToolResult(originalUserMessage, content.name, toolResult, dateParams);
+
+          if (!isValidResult && TOOL_CONFIG.LOGGING.LOG_ERRORS) {
+            console.warn(`Tool result validation failed for ${content.name}:`, {
+              query: originalUserMessage,
+              dateParams,
+              resultPreview: JSON.stringify(toolResult).substring(0, 200)
+            });
+          }
+
           // Check if result was cached
           const cacheStats = mcpService.getCacheStats();
           const wasCached = toolExecutionTime < 100; // Assume cached if very fast
 
-          // Notify completion
+          // Notify completion with validation status
           const toolCompleteData = {
             type: 'tool_complete',
             id: content.id,
@@ -400,10 +415,11 @@ async function handleConversationWithTools(
             result: toolResult,
             messageId: messageId,
             timestamp: timestamp,
-            displayText: `✅ Data retrieved${wasCached && TOOL_CONFIG.UI.SHOW_CACHE_INDICATOR ? ' (cached)' : ''}`,
-            status: 'completed',
+            displayText: `${isValidResult ? '✅' : '⚠️'} Data retrieved${wasCached && TOOL_CONFIG.UI.SHOW_CACHE_INDICATOR ? ' (cached)' : ''}${!isValidResult ? ' (validation warning)' : ''}`,
+            status: isValidResult ? 'completed' : 'completed_with_warning',
             executionTime: TOOL_CONFIG.UI.SHOW_EXECUTION_TIME ? toolExecutionTime : undefined,
-            wasCached: wasCached && TOOL_CONFIG.UI.SHOW_CACHE_INDICATOR
+            wasCached: wasCached && TOOL_CONFIG.UI.SHOW_CACHE_INDICATOR,
+            validationStatus: isValidResult
           };
           res.write(`data: ${JSON.stringify(toolCompleteData)}\n\n`);
 
@@ -437,17 +453,21 @@ async function handleConversationWithTools(
               enhancedResult = {
                 original_result: toolResult,
                 data_quality: 'empty',
+                validation_status: isValidResult,
                 fallback_guidance: `The ${content.name} tool returned no data. Acknowledge this limitation and provide a direct response.`,
-                simple_mode: true
+                simple_mode: true,
+                query_match_analysis: !isValidResult ? 'Tool result does not match the user query intent' : 'Query intent validated'
               };
             } else {
               enhancedResult = {
                 original_result: toolResult,
                 data_quality: 'empty',
+                validation_status: isValidResult,
                 fallback_guidance: `The ${content.name} tool returned no data. ${businessContext} Please provide expert insights about what this might mean and offer business recommendations despite the lack of data.`,
                 suggested_reasoning: `Consider typical laundromat operations, seasonal patterns, or industry benchmarks that might apply to this scenario.`,
                 business_context: businessContext,
-                recommendations: recommendations.length > 0 ? recommendations : undefined
+                recommendations: recommendations.length > 0 ? recommendations : undefined,
+                query_match_analysis: !isValidResult ? 'Tool result validation failed - may not match user query intent' : 'Query intent validated'
               };
             }
           } else if (isMinimal) {
@@ -459,16 +479,20 @@ async function handleConversationWithTools(
               enhancedResult = {
                 original_result: toolResult,
                 data_quality: 'limited',
+                validation_status: isValidResult,
                 fallback_guidance: `The ${content.name} tool returned minimal data. Present what's available directly.`,
-                simple_mode: true
+                simple_mode: true,
+                query_match_analysis: !isValidResult ? 'Limited data may not fully answer user query' : 'Data validates against query intent'
               };
             } else {
               enhancedResult = {
                 original_result: toolResult,
                 data_quality: 'limited',
+                validation_status: isValidResult,
                 fallback_guidance: `The ${content.name} tool returned minimal data. Extract maximum value from these results and supplement with business reasoning and industry knowledge.`,
                 data_enhancement_suggestions: 'Consider what additional context or calculations could make this data more valuable.',
-                business_context: businessContext
+                business_context: businessContext,
+                query_match_analysis: !isValidResult ? 'Limited data validation failed - may not fully match user query' : 'Data validates against query intent'
               };
             }
           }
@@ -716,3 +740,4 @@ app.listen(PORT, () => {
   console.log(`⚙️  Config: ${TOOL_CONFIG.DATA_KEYWORDS.length} data keywords, ${TOOL_CONFIG.EXCLUDE_KEYWORDS.length} exclude keywords`);
   console.log(`💾 Cache timeout: ${TOOL_CONFIG.PERFORMANCE.CACHE_TIMEOUT_MS}ms`);
 });
+
