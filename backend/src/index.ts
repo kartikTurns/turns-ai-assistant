@@ -75,6 +75,19 @@ app.get('/api/config', (req, res) => {
   });
 });
 
+// Simple test endpoint for debugging
+app.post('/api/test-chat', async (req, res) => {
+  const { message } = req.body;
+
+  // Simple non-streaming response for testing
+  res.json({
+    success: true,
+    message: 'Test endpoint working',
+    receivedMessage: message,
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.post('/api/chat', async (req, res) => {
   const { message, messages: conversationHistory } = req.body;
 
@@ -170,10 +183,11 @@ app.post('/api/chat', async (req, res) => {
   try {
     // Set response headers before starting stream
     res.writeHead(200, {
-      'Content-Type': 'text/plain',
-      'Transfer-Encoding': 'chunked',
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, X-Access-Token, X-Business-Id',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Access-Token, X-Business-Id, X-Refresh-Token',
     });
 
     const messageId = Date.now().toString();
