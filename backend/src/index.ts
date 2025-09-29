@@ -39,307 +39,156 @@ app.use(cors({
   credentials: true,
   allowedHeaders: ['Content-Type', 'X-Access-Token', 'X-Business-Id', 'X-Refresh-Token']
 }));
-
-// Body parser with error handling
-app.use(express.json({ limit: '10mb' }));
-
-// Environment validation middleware
-app.use((req, res, next) => {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({
-      error: 'Server Configuration Error',
-      message: 'ANTHROPIC_API_KEY is not configured',
-      details: 'Please check server environment variables',
-      timestamp: new Date().toISOString(),
-      endpoint: req.path
-    });
-  }
-  next();
-});
+app.use(express.json());
 
 app.get('/health', (req, res) => {
-  try {
-    const healthData = {
-      status: 'OK',
-      message: 'Claude Chat Clone Backend',
-      mcpReady: mcpService.isReady(),
-      configLoaded: true,
-      cacheStats: mcpService.getCacheStats(),
-      timestamp: new Date().toISOString(),
-      environment: {
-        nodeEnv: process.env.NODE_ENV || 'development',
-        port: PORT,
-        mcpServerUrl: MCP_SERVER_URL,
-        anthropicConfigured: !!process.env.ANTHROPIC_API_KEY
-      }
-    };
-    res.json(healthData);
-  } catch (error) {
-    res.status(500).json({
-      error: 'Health Check Failed',
-      message: error instanceof Error ? error.message : 'Unknown error occurred',
-      timestamp: new Date().toISOString(),
-      endpoint: '/health'
-    });
-  }
+  res.json({ 
+    status: 'OK', 
+    message: 'Claude Chat Clone Backend',
+    mcpReady: mcpService.isReady(),
+    configLoaded: true,
+    cacheStats: mcpService.getCacheStats()
+  });
 });
 
 app.get('/api/tools', (req, res) => {
-  try {
-    const tools = mcpService.getAvailableTools();
-    res.json({
-      success: true,
-      tools,
-      mcpReady: mcpService.isReady(),
-      mcpServerUrl: MCP_SERVER_URL,
-      config: {
-        cacheTimeout: TOOL_CONFIG.PERFORMANCE.CACHE_TIMEOUT_MS,
-        maxIterations: TOOL_CONFIG.AI_SETTINGS.MAX_ITERATIONS,
-        dataKeywords: TOOL_CONFIG.DATA_KEYWORDS.length,
-      },
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: 'Failed to fetch tools',
-      message: error instanceof Error ? error.message : 'Unknown error occurred',
-      mcpReady: mcpService.isReady(),
-      mcpServerUrl: MCP_SERVER_URL,
-      timestamp: new Date().toISOString(),
-      endpoint: '/api/tools'
-    });
-  }
+  const tools = mcpService.getAvailableTools();
+  res.json({
+    tools,
+    mcpReady: mcpService.isReady(),
+    mcpServerUrl: MCP_SERVER_URL,
+    config: {
+      cacheTimeout: TOOL_CONFIG.PERFORMANCE.CACHE_TIMEOUT_MS,
+      maxIterations: TOOL_CONFIG.AI_SETTINGS.MAX_ITERATIONS,
+      dataKeywords: TOOL_CONFIG.DATA_KEYWORDS.length,
+    }
+  });
 });
 
 app.get('/api/config', (req, res) => {
-  try {
-    res.json({
-      success: true,
-      ui: TOOL_CONFIG.UI,
-      performance: TOOL_CONFIG.PERFORMANCE,
-      dataKeywordsCount: TOOL_CONFIG.DATA_KEYWORDS.length,
-      excludeKeywordsCount: TOOL_CONFIG.EXCLUDE_KEYWORDS.length,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: 'Failed to fetch configuration',
-      message: error instanceof Error ? error.message : 'Unknown error occurred',
-      timestamp: new Date().toISOString(),
-      endpoint: '/api/config'
-    });
-  }
+  // Endpoint to get configuration for frontend if needed
+  res.json({
+    ui: TOOL_CONFIG.UI,
+    performance: TOOL_CONFIG.PERFORMANCE,
+    dataKeywordsCount: TOOL_CONFIG.DATA_KEYWORDS.length,
+    excludeKeywordsCount: TOOL_CONFIG.EXCLUDE_KEYWORDS.length,
+  });
 });
 
 app.post('/api/chat', async (req, res) => {
-  const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const timestamp = new Date().toISOString();
+  const { message, messages: conversationHistory } = req.body;
 
+  // Extract auth parameters from headers
+  const access_token = req.headers['x-access-token'] as string;
+  const business_id = req.headers['x-business-id'] as string;
+  const refresh_token = req.headers['x-refresh-token'] as string;
+
+  if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
+    console.log('Received message:', message);
+    console.log('Conversation history length:', conversationHistory ? conversationHistory.length : 0);
+    console.log('Auth headers - Access token:', !!access_token, 'Business ID:', business_id, 'Refresh token:', !!refresh_token);
+  }
+
+  // Check if auth parameters are provided
+  if (!access_token || !business_id) {
+    return res.status(401).json({
+      error: 'Authentication required',
+      message: 'Access token and business ID are required',
+      redirect: authService.getRedirectUrl(),
+      requiresRedirect: true
+    });
+  }
+
+  // Validate authentication with external API
   try {
-    // Request validation
-    if (!req.body) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Request body is required',
-        details: 'Please provide a valid JSON payload with message field',
-        timestamp,
-        requestId,
-        endpoint: '/api/chat'
-      });
-    }
+    const authResult = await authService.validateAuth(access_token, business_id);
 
-    const { message, messages: conversationHistory } = req.body;
+    if (!authResult.status) {
+      console.log('Backend: Authentication failed:', authResult.message);
 
-    // Validate required fields
-    if (!message) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Message field is required',
-        details: 'The message field cannot be empty or null',
-        received: { message, hasHistory: !!conversationHistory },
-        timestamp,
-        requestId,
-        endpoint: '/api/chat'
-      });
-    }
+      // If access token expired and we have refresh token, try to refresh
+      if (refresh_token && authResult.message && authResult.message.includes('expired')) {
+        console.log('Backend: Access token expired, attempting to refresh...');
 
-    if (typeof message !== 'string') {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Message must be a string',
-        details: `Expected string, received ${typeof message}`,
-        timestamp,
-        requestId,
-        endpoint: '/api/chat'
-      });
-    }
+        const refreshResult = await authService.refreshAccessToken(refresh_token, business_id);
 
-    if (message.trim().length === 0) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Message cannot be empty',
-        details: 'Please provide a non-empty message',
-        timestamp,
-        requestId,
-        endpoint: '/api/chat'
-      });
-    }
-
-    // Extract auth parameters from headers
-    const access_token = req.headers['x-access-token'] as string;
-    const business_id = req.headers['x-business-id'] as string;
-    const refresh_token = req.headers['x-refresh-token'] as string;
-
-    if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
-      console.log(`[${requestId}] Received message:`, message);
-      console.log(`[${requestId}] Conversation history length:`, conversationHistory ? conversationHistory.length : 0);
-      console.log(`[${requestId}] Auth headers - Access token:`, !!access_token, 'Business ID:', business_id, 'Refresh token:', !!refresh_token);
-    }
-
-    // Check if auth parameters are provided
-    if (!access_token || !business_id) {
-      return res.status(401).json({
-        error: 'Authentication Required',
-        message: 'Access token and business ID are required',
-        details: {
-          hasAccessToken: !!access_token,
-          hasBusinessId: !!business_id,
-          hasRefreshToken: !!refresh_token
-        },
-        redirect: authService.getRedirectUrl(),
-        requiresRedirect: true,
-        timestamp,
-        requestId,
-        endpoint: '/api/chat'
-      });
-    }
-
-    // Validate authentication with external API
-    try {
-      const authResult = await authService.validateAuth(access_token, business_id);
-
-      if (!authResult.status) {
-        console.log(`[${requestId}] Authentication failed:`, authResult.message);
-
-        // If access token expired and we have refresh token, try to refresh
-        if (refresh_token && authResult.message && authResult.message.includes('expired')) {
-          console.log(`[${requestId}] Access token expired, attempting to refresh...`);
-
-          const refreshResult = await authService.refreshAccessToken(refresh_token, business_id);
-
-          if (refreshResult.status && refreshResult.data?.access_token) {
-            console.log(`[${requestId}] Token refresh successful, new token obtained`);
-            return res.status(200).json({
-              success: true,
-              message: 'Token refreshed successfully',
-              tokenRefreshed: true,
-              newAccessToken: refreshResult.data.access_token,
-              refreshData: refreshResult,
-              timestamp,
-              requestId
-            });
-          } else {
-            console.log(`[${requestId}] Token refresh failed:`, refreshResult.message);
-            return res.status(401).json({
-              error: 'Token Refresh Failed',
-              message: refreshResult.message || 'Unable to refresh token',
-              details: 'The refresh token is invalid or expired',
-              redirect: authService.getRedirectUrl(),
-              requiresRedirect: true,
-              refreshFailed: true,
-              timestamp,
-              requestId,
-              endpoint: '/api/chat'
-            });
-          }
+        if (refreshResult.status && refreshResult.data?.access_token) {
+          console.log('Backend: Token refresh successful, new token obtained');
+          // Return the new access token to frontend
+          return res.status(200).json({
+            success: true,
+            message: 'Token refreshed successfully',
+            tokenRefreshed: true,
+            newAccessToken: refreshResult.data.access_token,
+            refreshData: refreshResult
+          });
         } else {
-          // No refresh token or not an expiry error, return auth failure
+          console.log('Backend: Token refresh failed:', refreshResult.message);
+          // Refresh failed, redirect to login
           return res.status(401).json({
-            error: 'Authentication Failed',
-            message: authResult.message || 'Invalid authentication credentials',
-            details: refresh_token ? 'Token is invalid (not expired)' : 'No refresh token provided',
+            error: 'Token refresh failed',
+            message: refreshResult.message || 'Unable to refresh token',
             redirect: authService.getRedirectUrl(),
             requiresRedirect: true,
-            authData: {
-              status: authResult.status,
-              data: authResult.data,
-              meta: authResult.meta,
-              validation_error: authResult.validation_error
-            },
-            timestamp,
-            requestId,
-            endpoint: '/api/chat'
+            refreshFailed: true
           });
         }
-    }
-
-      console.log(`[${requestId}] Authentication successful for business:`, business_id);
-    } catch (error) {
-      console.error(`[${requestId}] Authentication system error:`, error);
-      return res.status(500).json({
-        error: 'Authentication System Error',
-        message: 'Unable to validate authentication due to system error',
-        details: error instanceof Error ? error.message : 'Unknown authentication system error',
-        redirect: authService.getRedirectUrl(),
-        requiresRedirect: true,
-        timestamp,
-        requestId,
-        endpoint: '/api/chat'
-      });
-    }
-
-    // Start conversation processing
-    try {
-      // Set response headers before starting stream
-      res.writeHead(200, {
-        'Content-Type': 'text/plain',
-        'Transfer-Encoding': 'chunked',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type, X-Access-Token, X-Business-Id',
-      });
-
-      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const streamTimestamp = new Date().toISOString();
-
-      console.log(`[${requestId}] Starting conversation processing with messageId: ${messageId}`);
-      await handleConversationWithTools(message, conversationHistory, res, messageId, streamTimestamp, access_token, business_id);
-
-    } catch (error) {
-      console.error(`[${requestId}] Error during conversation processing:`, error);
-      if (!res.headersSent) {
-        res.status(500).json({
-          error: 'Conversation Processing Error',
-          message: 'Failed to process message with Claude API',
-          details: error instanceof Error ? error.message : 'Unknown processing error',
-          timestamp,
-          requestId,
-          endpoint: '/api/chat'
-        });
       } else {
-        // If headers already sent (streaming started), end the stream gracefully
-        const errorData = {
-          type: 'error',
-          error: 'Processing Error',
-          message: error instanceof Error ? error.message : 'Unknown error occurred',
-          timestamp: new Date().toISOString(),
-          requestId
-        };
-        res.write(`data: ${JSON.stringify(errorData)}\n\n`);
-        res.end();
+        // No refresh token or not an expiry error, return auth failure
+        return res.status(401).json({
+          error: 'Authentication failed',
+          message: authResult.message,
+          redirect: authService.getRedirectUrl(),
+          requiresRedirect: true,
+          authData: {
+            status: authResult.status,
+            data: authResult.data,
+            meta: authResult.meta,
+            validation_error: authResult.validation_error
+          }
+        });
       }
     }
-  } catch (outerError) {
-    // Catch any validation or setup errors
-    console.error(`[${requestId || 'unknown'}] Outer error in chat endpoint:`, outerError);
+
+    console.log('Backend: Authentication successful for business:', business_id);
+  } catch (error) {
+    console.error('Backend: Authentication error:', error);
+    return res.status(500).json({
+      error: 'Authentication system error',
+      message: 'Unable to validate authentication',
+      redirect: authService.getRedirectUrl(),
+      requiresRedirect: true
+    });
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({
+      error: 'ANTHROPIC_API_KEY not configured'
+    });
+  }
+
+  try {
+    // Set response headers before starting stream
+    res.writeHead(200, {
+      'Content-Type': 'text/plain',
+      'Transfer-Encoding': 'chunked',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Access-Token, X-Business-Id',
+    });
+
+    const messageId = Date.now().toString();
+    const timestamp = new Date().toISOString();
+
+    await handleConversationWithTools(message, conversationHistory, res, messageId, timestamp, access_token, business_id);
+
+  } catch (error) {
+    console.error('Error calling Claude API:', error);
     if (!res.headersSent) {
       res.status(500).json({
-        error: 'Internal Server Error',
-        message: 'An unexpected error occurred while processing your request',
-        details: outerError instanceof Error ? outerError.message : 'Unknown server error',
-        timestamp: new Date().toISOString(),
-        requestId: requestId || 'unknown',
-        endpoint: '/api/chat'
+        error: 'Failed to process message with Claude API'
       });
+    } else {
+      res.end();
     }
   }
 });
@@ -829,75 +678,21 @@ Remember: You can call more tools if needed to provide better insights, comparis
 
 // Add endpoint to clear cache if needed
 app.post('/api/cache/clear', (req, res) => {
-  try {
-    mcpService.clearCache();
-    res.json({
-      success: true,
-      message: 'Cache cleared successfully',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: 'Cache Clear Failed',
-      message: error instanceof Error ? error.message : 'Unknown error occurred',
-      timestamp: new Date().toISOString(),
-      endpoint: '/api/cache/clear'
-    });
-  }
-});
-
-// Add endpoint to get cache statistics
-app.get('/api/cache/stats', (req, res) => {
-  try {
-    const stats = mcpService.getCacheStats();
-    res.json({
-      success: true,
-      ...stats,
-      cacheTimeout: TOOL_CONFIG.PERFORMANCE.CACHE_TIMEOUT_MS,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: 'Failed to get cache statistics',
-      message: error instanceof Error ? error.message : 'Unknown error occurred',
-      timestamp: new Date().toISOString(),
-      endpoint: '/api/cache/stats'
-    });
-  }
-});
-
-// Handle 404 errors
-app.use('*', (req, res) => {
-  res.status(404).json({
-    error: 'Not Found',
-    message: `Endpoint ${req.method} ${req.originalUrl} not found`,
-    availableEndpoints: [
-      'GET /health',
-      'GET /api/tools',
-      'GET /api/config',
-      'POST /api/chat',
-      'GET /api/cache/stats',
-      'POST /api/cache/clear'
-    ],
+  mcpService.clearCache();
+  res.json({ 
+    success: true, 
+    message: 'Cache cleared successfully',
     timestamp: new Date().toISOString()
   });
 });
 
-// Global error handler
-app.use((error: any, req: any, res: any, next: any) => {
-  console.error('Global error handler caught:', error);
-
-  if (res.headersSent) {
-    return next(error);
-  }
-
-  const statusCode = error.status || error.statusCode || 500;
-  res.status(statusCode).json({
-    error: 'Internal Server Error',
-    message: error.message || 'An unexpected error occurred',
-    details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-    timestamp: new Date().toISOString(),
-    endpoint: req.path
+// Add endpoint to get cache statistics
+app.get('/api/cache/stats', (req, res) => {
+  const stats = mcpService.getCacheStats();
+  res.json({
+    ...stats,
+    cacheTimeout: TOOL_CONFIG.PERFORMANCE.CACHE_TIMEOUT_MS,
+    timestamp: new Date().toISOString()
   });
 });
 
