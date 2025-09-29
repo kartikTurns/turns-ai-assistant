@@ -18,7 +18,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 const MCP_SERVER_URL = process.env.MCP_SERVER_URL || 'https://6efm5r3o2d.execute-api.ap-south-1.amazonaws.com/prod';
-console.log(`api_key`, process.env.ANTHROPIC_API_KEY);
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
@@ -320,9 +319,7 @@ async function handleConversationWithTools(
     }
 
     const startTime = Date.now();
-    console.log(createParams);
     const response = await anthropic.messages.create(createParams);
-    console.log(response);
     const responseTime = Date.now() - startTime;
     
     if (TOOL_CONFIG.LOGGING.LOG_PERFORMANCE) {
