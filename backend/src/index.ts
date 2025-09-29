@@ -320,7 +320,9 @@ async function handleConversationWithTools(
     }
 
     const startTime = Date.now();
+    console.log(createParams);
     const response = await anthropic.messages.create(createParams);
+    console.log(response);
     const responseTime = Date.now() - startTime;
     
     if (TOOL_CONFIG.LOGGING.LOG_PERFORMANCE) {
