@@ -45,7 +45,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
               fontWeight: '600', 
               color: 'black' 
             }}>
-              {isUser ? 'You' : 'Claude'}
+              {isUser ? 'You' : 'PayTurn'}
             </span>
             <span style={{ 
               fontSize: '12px', 
