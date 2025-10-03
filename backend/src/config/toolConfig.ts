@@ -75,10 +75,20 @@ export const TOOL_CONFIG = {
 
   AI_SETTINGS: {
     MODEL: 'claude-sonnet-4-20250514',
-    MAX_TOKENS: 8192,  // Increased for complex multi-tool responses with Sonnet
-    MAX_ITERATIONS: 6,  // Allow more iterations for sophisticated tool chaining with better model
+    MAX_TOKENS: 4096,  // Balanced for responses
+    MAX_ITERATIONS: 8,  // Higher iterations for smart progressive data gathering
     TEMPERATURE: 0.1,   // Lower temperature for consistent reasoning and data handling
-    CONTEXT_MESSAGE_LIMIT: 3,  // More context with better model (16 total with user/assistant pairs)
+    CONTEXT_MESSAGE_LIMIT: 3,  // Keep 3 pairs (6 messages) with smart filtering
+  },
+
+  // Progressive data gathering strategy for smart iterative tool calls
+  PROGRESSIVE_STRATEGY: {
+    ENABLE_PROGRESSIVE_GATHERING: true,  // Enable smart multi-step data gathering
+    INITIAL_LIMIT: 10,                   // Start with small limit to test data availability
+    EXPAND_MULTIPLIER: 3,                // Multiply limit by this factor on each iteration
+    MAX_PROGRESSIVE_LIMIT: 200,          // Never exceed this limit even progressively
+    MIN_DATA_THRESHOLD: 3,               // If we get less than this, try expanding
+    SMART_AGGREGATION: true,             // For financial queries, prefer aggregated data first
   },
 
   UI: {
@@ -89,11 +99,12 @@ export const TOOL_CONFIG = {
   },
 
   FALLBACK: {
-    ENABLE_INTELLIGENT_FALLBACK: true,  // Enable fallback reasoning when tools fail
-    PROVIDE_BUSINESS_CONTEXT: true,     // Include industry knowledge in responses
-    INDICATE_DATA_LIMITATIONS: true,     // Clearly mark when data is limited
-    SUGGEST_ALTERNATIVES: true,         // Offer alternative approaches when data is unavailable
+    ENABLE_INTELLIGENT_FALLBACK: false, // DISABLED - Prevent fake data generation
+    PROVIDE_BUSINESS_CONTEXT: false,    // DISABLED - No fake context
+    INDICATE_DATA_LIMITATIONS: true,    // Still indicate when data is missing
+    SUGGEST_ALTERNATIVES: false,        // DISABLED - No fake alternatives
     MIN_DATA_THRESHOLD: 1,              // Minimum data points to consider "sufficient"
+    STRICT_MODE: true,                  // Only return real data from actual API calls
   },
 
   LOGGING: {
@@ -104,6 +115,25 @@ export const TOOL_CONFIG = {
     VERBOSE: false,
     LOG_MULTI_TOOL_REASONING: true,     // Log multi-tool workflow decisions
     LOG_FALLBACK_SCENARIOS: true,      // Log when fallback reasoning is used
+    LOG_EFFICIENCY_WARNINGS: true,     // Log efficiency issues (large limits, duplicates)
+  },
+
+  EFFICIENCY: {
+    MAX_REASONABLE_LIMIT: 100,          // Warn if show_limit exceeds this
+    DUPLICATE_CALL_WARNING: true,       // Warn about duplicate tool calls
+    TRACK_TOOL_USAGE: true,            // Track tool call patterns
+  },
+
+  HISTORY_MANAGEMENT: {
+    FILTER_TOOL_RESULTS: true,          // Remove verbose tool results from history
+    MAX_TOOL_RESULT_SIZE: 300,          // Max characters for tool results summary (balanced)
+    SUMMARIZE_LARGE_RESULTS: true,      // Summarize large tool results
+    MAX_TOTAL_HISTORY_SIZE: 30000,      // Max total character count for history (balanced)
+    PRESERVE_USER_MESSAGES: true,       // Always keep user messages
+    PRESERVE_ASSISTANT_TEXT: true,      // Keep assistant text responses
+    STRIP_TOOL_USE_CONTENT: false,      // Keep minimal tool_use info for context
+    STRIP_TOOL_RESULT_CONTENT: false,   // Keep summarized tool_result for context
+    KEEP_TOOL_SUMMARIES: true,          // Keep intelligent summaries of tool calls
   },
 };
 
@@ -161,7 +191,19 @@ export function generateSystemPrompt(date: Date = new Date(), tools: string[] = 
   const year = date.getFullYear();
   const month = date.toISOString().substring(0, 7); // YYYY-MM format
 
-  const basePrompt = `You are an AI assistant for a laundromat management system. Today is ${dateStr}.\nAvailable tools: ${tools.join(', ')}`;
+  const basePrompt = `You are an AI assistant for a laundromat management system. Today is ${dateStr}.\nAvailable tools: ${tools.join(', ')}
+
+CRITICAL: NEVER waste tokens on explanatory text before tool calls. Call tools IMMEDIATELY.
+
+🔧 MULTI-TOOL STRATEGY:
+- You can call MULTIPLE tools in a SINGLE response
+- Analyze the query and call ALL needed tools at once
+- This is MORE EFFICIENT than calling one tool, waiting, then calling another
+- Examples:
+  • "revenue and customers" → call get_revenue AND get_customers together
+  • "compare months" → call tools for BOTH months at once
+  • "show orders and inventory" → call BOTH tools simultaneously
+`;
 
   if (mode === 'simple') {
     return `${basePrompt}
@@ -170,28 +212,29 @@ SIMPLE MODE - Direct Data Retrieval:
 You are in SIMPLE MODE. The user has asked for straightforward data retrieval.
 
 Guidelines:
-1. SMART TOOL SELECTION:
+1. IMMEDIATE MULTI-TOOL EXECUTION:
+   - Call ALL needed tools IMMEDIATELY in one response (no explanatory text)
+   - Do NOT say "I'll get the data for you" or similar phrases
+   - If query needs multiple data points, call multiple tools at once
    - Use logical reasoning to find the right data source
    - Revenue/sales/money questions need order/transaction data
-   - Don't say "no tools available" - think about where the data lives
-   - Call ONLY the minimum required tool(s) to answer the question
 
-2. DIRECT RESPONSES:
+2. TOOL CHAINING EXAMPLES:
+   - "revenue and customers" → call get_revenue + get_customers together
+   - "show orders and their customers" → call get_orders + get_customers together
+   - "compare this month vs last month" → call tools with different date params together
+
+3. DIRECT RESPONSES:
    - Provide minimal context with the data (e.g., "You have 364 customers" not just "364")
    - Do NOT add analysis, insights, or recommendations unless asked
    - Keep responses concise and to-the-point
    - Use natural, conversational phrasing for single values
    - Format data clearly but don't over-explain
 
-3. NO ASSUMPTIONS:
+4. NO ASSUMPTIONS:
    - Do NOT add date filters unless the user specifies them
    - Do NOT provide "comprehensive" analysis unless requested
-   - Do NOT call tools for context that wasn't asked for
-
-4. EXAMPLES:
-   - "how many customers" → call get_customer_count once, return "You have 364 customers"
-   - "show me first 10 customers" → call get_customers with limit=10, return clean customer list
-   - "total revenue" → call get_revenue once, return "Total revenue: $X"
+   - Only call tools directly related to the query
 
 5. DATA PROCESSING:
    - Extract only relevant information from tool responses
@@ -204,7 +247,7 @@ FALLBACK (if tools fail):
 - Acknowledge data limitation briefly
 - Don't add business analysis unless user asks for it
 
-Remember: Be direct, minimal, and literal. Answer exactly what was asked, nothing more.`;
+Remember: Call ALL needed tools at once, be direct, minimal, and literal. Answer exactly what was asked, nothing more.`;
   } else {
     return `${basePrompt}
 
@@ -214,37 +257,48 @@ You are in ANALYSIS MODE. The user wants detailed analysis and insights.
 INTELLIGENT REASONING FRAMEWORK:
 1. ANALYZE THE REQUEST:
    - Break down complex questions into component data needs
-   - Identify all data points required for a complete answer
-   - Plan the sequence of tool calls needed
+   - Identify ALL data points required for a complete answer
+   - PLAN to call ALL needed tools in ONE response (not sequentially)
    - THINK LOGICALLY: Revenue/sales/money data comes from order/transaction data
 
-2. SMART TOOL SELECTION:
+2. MULTI-TOOL EXECUTION STRATEGY:
+   - Call 2-5 tools in PARALLEL when query needs multiple data sources
+   - Examples of when to call multiple tools:
+     • Comparisons: "this month vs last month" → 2 tool calls with different dates
+     • Related metrics: "revenue and customers" → 2 tool calls at once
+     • Comprehensive view: "business overview" → 3-4 tools (revenue, customers, orders, inventory)
+   - Don't wait for one result before calling another tool
+   - Call ALL needed tools IMMEDIATELY in your first response
+
+3. SMART TOOL SELECTION:
    - Don't just look for exact tool name matches
-   - Understand that financial questions need transaction/order data
+   - Use semantic understanding to map user intent to available tools
+   - Read tool descriptions carefully - they contain hints about what data they provide
+   - Financial queries (revenue/sales/money) often need data from order/transaction/payment tools
    - Business metrics can be calculated from available data sources
    - Use logical reasoning to map concepts to data sources
 
-3. TOOL CHAINING STRATEGY:
-   - Start with foundational data (totals, counts, overviews)
-   - Then drill down into specifics (breakdowns, details, comparisons)
-   - Use results from earlier tools to inform parameters for later tools
-   - Call multiple tools to build comprehensive insights
+4. EFFICIENT TOOL EXECUTION:
+   - Call tools IMMEDIATELY without unnecessary explanations
+   - Call multiple related tools together in one response
+   - Use results from ALL tools to build comprehensive insights
+   - Don't make sequential calls when parallel calls are possible
 
-3. COMPREHENSIVE DATA GATHERING:
-   - For comparative questions: get data for all time periods being compared
-   - For trend analysis: gather data across multiple time points
-   - For detailed breakdowns: get both summary and detailed views
-   - For business insights: combine multiple metrics (revenue + customers + orders)
+5. COMPREHENSIVE DATA GATHERING:
+   - For comparative questions: call tools for ALL time periods at once
+   - For trend analysis: gather data across multiple time points in parallel
+   - For detailed breakdowns: get both summary and detailed views together
+   - For business insights: combine multiple metrics (revenue + customers + orders) in one call
 
-4. SMART PARAMETER USAGE:
+6. SMART PARAMETER USAGE:
    - Use current year (${year}) as default when no timeframe specified
    - Use current month (${month}) for "recent" or "this month" queries
    - Use reasonable date ranges for trend analysis (last 3-6 months)
-   - Try different parameter combinations if initial results are empty
+   - When comparing time periods, call tools with different date params in parallel
 
-5. SYNTHESIS APPROACH:
-   - Don't stop after one tool call if more data would improve the answer
-   - Cross-reference data between tools to find insights
+7. SYNTHESIS APPROACH:
+   - Call ALL needed tools at once, then analyze results together
+   - Cross-reference data between multiple tool results to find insights
    - Calculate derived metrics (growth rates, percentages, ratios)
    - Present findings with analysis and recommendations
 
@@ -338,32 +392,112 @@ export function filterToolResultForSimpleMode(toolName: string, result: any, ori
   }
 }
 
+// Detect if query needs multiple tools (chaining/parallel execution)
+export function detectMultiToolNeeds(userQuery: string): { needsMultipleTools: boolean; reasoning: string; suggestedToolTypes: string[] } {
+  const lowerQuery = userQuery.toLowerCase();
+
+  // Patterns that indicate multiple tools needed
+  const multiToolPatterns = [
+    { pattern: /\b(and|with|plus|along with|as well as|together with)\b/, types: ['related_metrics'] },
+    { pattern: /\b(compare|comparison|vs|versus|against|difference between)\b/, types: ['comparison'] },
+    { pattern: /\b(overview|dashboard|summary|complete|full|comprehensive|all)\b/, types: ['comprehensive'] },
+    { pattern: /\b(both|multiple|all|various|several)\b/, types: ['multiple_entities'] },
+    { pattern: /\b(trend|over time|monthly|weekly|daily|historical)\b/, types: ['time_series'] },
+    { pattern: /\b(top.*and|best.*and|highest.*and|most.*and)\b/, types: ['ranked_multiple'] }
+  ];
+
+  let needsMultipleTools = false;
+  let reasoning = '';
+  const suggestedToolTypes: string[] = [];
+
+  for (const { pattern, types } of multiToolPatterns) {
+    if (pattern.test(lowerQuery)) {
+      needsMultipleTools = true;
+      suggestedToolTypes.push(...types);
+
+      if (!reasoning) {
+        if (types.includes('comparison')) {
+          reasoning = 'Query requires comparison, likely needs same tool with different parameters';
+        } else if (types.includes('comprehensive')) {
+          reasoning = 'Query asks for comprehensive view, needs multiple data sources';
+        } else if (types.includes('related_metrics')) {
+          reasoning = 'Query mentions multiple metrics/entities with "and", needs parallel data retrieval';
+        } else if (types.includes('time_series')) {
+          reasoning = 'Query involves time-based analysis, may need multiple time periods';
+        }
+      }
+    }
+  }
+
+  // Check for multiple noun phrases (e.g., "customers and revenue", "orders and inventory")
+  const dataNouns = ['customer', 'order', 'revenue', 'sales', 'inventory', 'stock', 'service', 'item', 'product', 'transaction'];
+  const foundNouns = dataNouns.filter(noun => lowerQuery.includes(noun));
+
+  if (foundNouns.length >= 2) {
+    needsMultipleTools = true;
+    if (!reasoning) {
+      reasoning = `Query mentions multiple data types: ${foundNouns.join(', ')}`;
+    }
+    suggestedToolTypes.push('multiple_data_types');
+  }
+
+  return {
+    needsMultipleTools,
+    reasoning: reasoning || 'Single data source query',
+    suggestedToolTypes: [...new Set(suggestedToolTypes)] // Remove duplicates
+  };
+}
+
 // Smart tool matching based on query analysis and available MCP tools
 export function smartToolSelection(userQuery: string, availableTools: any[]): string[] {
   const lowerQuery = userQuery.toLowerCase();
   const selectedTools: string[] = [];
   const toolScores: { [toolName: string]: number } = {};
 
-  // Smart relationship detection - understand that financial data comes from transaction data
+  // Smart relationship detection - understand semantic relationships between concepts
   const getRelatedTools = (query: string, tools: any[]) => {
     const relatedTools: string[] = [];
 
-    // Financial queries should look for transaction/order data
-    const financialTerms = ['revenue', 'sales', 'money', 'income', 'earnings', 'profit', 'financial', 'made', 'earned'];
-    const isFinancialQuery = financialTerms.some(term => query.includes(term));
+    // Define semantic concept mappings - what concepts relate to what tool characteristics
+    const conceptMappings = {
+      financial: {
+        queryTerms: ['revenue', 'sales', 'money', 'income', 'earnings', 'profit', 'financial', 'made', 'earned', 'total', 'amount', 'payment', 'paid', 'cost', 'price'],
+        toolKeywords: ['order', 'transaction', 'sale', 'payment', 'invoice', 'billing', 'purchase', 'receipt']
+      },
+      customer: {
+        queryTerms: ['customer', 'client', 'user', 'member', 'subscriber', 'buyer'],
+        toolKeywords: ['customer', 'client', 'user', 'member', 'account', 'profile']
+      },
+      inventory: {
+        queryTerms: ['inventory', 'stock', 'item', 'product', 'supply', 'material'],
+        toolKeywords: ['inventory', 'stock', 'item', 'product', 'material', 'supply']
+      },
+      analytics: {
+        queryTerms: ['report', 'analytics', 'metric', 'performance', 'dashboard', 'summary', 'statistics', 'stats'],
+        toolKeywords: ['report', 'metric', 'analytics', 'stats', 'summary', 'dashboard', 'insight']
+      }
+    };
 
-    if (isFinancialQuery) {
-      // Look for tools that handle transactions, orders, or sales data
-      tools.forEach(tool => {
-        const toolName = tool.name.toLowerCase();
-        const toolDesc = (tool.description || '').toLowerCase();
+    // Check each concept mapping
+    Object.entries(conceptMappings).forEach(([concept, mapping]) => {
+      const matchesQuery = mapping.queryTerms.some(term => query.includes(term));
 
-        if (toolName.includes('order') || toolName.includes('transaction') || toolName.includes('sales') ||
-            toolDesc.includes('order') || toolDesc.includes('transaction') || toolDesc.includes('payment')) {
-          relatedTools.push(tool.name);
-        }
-      });
-    }
+      if (matchesQuery) {
+        // Find tools that match this concept's keywords
+        tools.forEach(tool => {
+          const toolName = tool.name.toLowerCase();
+          const toolDesc = (tool.description || '').toLowerCase();
+
+          const matchesToolKeyword = mapping.toolKeywords.some(keyword =>
+            toolName.includes(keyword) || toolDesc.includes(keyword)
+          );
+
+          if (matchesToolKeyword && !relatedTools.includes(tool.name)) {
+            relatedTools.push(tool.name);
+          }
+        });
+      }
+    });
 
     return relatedTools;
   };
@@ -531,12 +665,107 @@ export function validateToolResult(userQuery: string, toolName: string, toolResu
   }
 }
 
+// Smart parameter generation for tools based on query analysis
+export function generateSmartToolParameters(toolName: string, userQuery: string, dateParams: any, iteration: number = 0): any {
+  const lowerQuery = userQuery.toLowerCase();
+  const params: any = {};
+
+  // Add date parameters if detected
+  if (dateParams) {
+    Object.assign(params, dateParams);
+  }
+
+  // Intelligent limit calculation based on query intent with iteration support
+  const limitParams = calculateIntelligentLimit(userQuery, toolName, iteration);
+  if (limitParams) {
+    Object.assign(params, limitParams);
+  }
+
+  // Add store-specific filters if mentioned
+  const storeMatch = lowerQuery.match(/store\s*(\w+|"[^"]+"|'[^']+')/);
+  if (storeMatch) {
+    params.store_filter = storeMatch[1].replace(/['"]/g, '');
+  }
+
+  return params;
+}
+
+// Calculate intelligent limits based on query context with progressive strategy
+function calculateIntelligentLimit(userQuery: string, toolName: string, iteration: number = 0): any | null {
+  const lowerQuery = userQuery.toLowerCase();
+
+  // Extract explicit numbers from query
+  const numberMatch = lowerQuery.match(/(\d+)/);
+  const explicitNumber = numberMatch ? parseInt(numberMatch[1]) : null;
+
+  // Progressive gathering: start small and expand if needed
+  const useProgressive = TOOL_CONFIG.PROGRESSIVE_STRATEGY.ENABLE_PROGRESSIVE_GATHERING;
+  const initialLimit = TOOL_CONFIG.PROGRESSIVE_STRATEGY.INITIAL_LIMIT;
+  const multiplier = TOOL_CONFIG.PROGRESSIVE_STRATEGY.EXPAND_MULTIPLIER;
+  const maxProgressive = TOOL_CONFIG.PROGRESSIVE_STRATEGY.MAX_PROGRESSIVE_LIMIT;
+
+  // Calculate progressive limit: start small, expand on later iterations
+  const calculateProgressiveLimit = (baseLimit: number): number => {
+    if (!useProgressive || iteration === 0) {
+      return Math.min(baseLimit, initialLimit);
+    }
+    // Expand limit on each iteration: 10 -> 30 -> 90 -> 200 (max)
+    const progressiveLimit = initialLimit * Math.pow(multiplier, iteration);
+    return Math.min(progressiveLimit, maxProgressive, baseLimit);
+  };
+
+  // Count/summary queries - minimal data needed
+  if (lowerQuery.includes('how many') || lowerQuery.includes('count') || lowerQuery.includes('total')) {
+    return { show_limit: 1 }; // Only need count, not full data
+  }
+
+  // "First N" or "top N" queries
+  if (lowerQuery.includes('first') || lowerQuery.includes('top')) {
+    const limit = explicitNumber || 10; // Default to 10 if not specified
+    return { show_limit: Math.min(limit, 50) }; // Cap at 50 for efficiency
+  }
+
+  // List queries without specific limits
+  if (lowerQuery.includes('list') || lowerQuery.includes('show me')) {
+    // Check if it's a detailed analysis request
+    const analysisKeywords = ['analyze', 'detailed', 'comprehensive', 'all'];
+    const needsDetailedData = analysisKeywords.some(keyword => lowerQuery.includes(keyword));
+
+    if (needsDetailedData) {
+      return { show_limit: calculateProgressiveLimit(100) }; // Start small, expand if needed
+    } else {
+      return { show_limit: calculateProgressiveLimit(20) }; // Progressive list size
+    }
+  }
+
+  // Revenue/financial queries - often need aggregated data, not individual records
+  const financialTerms = ['revenue', 'sales', 'income', 'earnings', 'profit'];
+  if (financialTerms.some(term => lowerQuery.includes(term))) {
+    // Start with small limit to check data availability
+    if (TOOL_CONFIG.PROGRESSIVE_STRATEGY.SMART_AGGREGATION) {
+      return { show_limit: calculateProgressiveLimit(30) };
+    }
+    return { show_limit: calculateProgressiveLimit(50) };
+  }
+
+  // Default intelligent limits based on tool type with progressive strategy
+  if (toolName.includes('customer')) {
+    return { show_limit: explicitNumber || calculateProgressiveLimit(25) };
+  } else if (toolName.includes('order')) {
+    return { show_limit: explicitNumber || calculateProgressiveLimit(50) };
+  }
+
+  // No specific limit needed
+  return null;
+}
+
 // Generate enhanced system prompt with tool guidance
 export function generateEnhancedSystemPrompt(
   date: Date = new Date(),
   availableTools: any[] = [],
   userQuery: string = '',
-  mode: 'simple' | 'analysis' = 'simple'
+  mode: 'simple' | 'analysis' = 'simple',
+  currentIteration: number = 0
 ): string {
   const dateStr = date.toISOString().split('T')[0];
   const year = date.getFullYear();
@@ -544,62 +773,405 @@ export function generateEnhancedSystemPrompt(
 
   const suggestedTools = smartToolSelection(userQuery, availableTools);
   const dateParams = extractDateParameters(userQuery);
+  const multiToolAnalysis = detectMultiToolNeeds(userQuery);
 
+  // Generate smart parameters for each suggested tool with iteration awareness
+  const toolParameterGuidance = suggestedTools.map(toolName => {
+    const smartParams = generateSmartToolParameters(toolName, userQuery, dateParams, currentIteration);
+    return `${toolName}: ${JSON.stringify(smartParams)}`;
+  }).join('\n');
+
+  // Multi-tool guidance
+  let multiToolGuidance = '';
+  if (multiToolAnalysis.needsMultipleTools) {
+    multiToolGuidance = `\n\n⚡ MULTI-TOOL RECOMMENDATION:
+${multiToolAnalysis.reasoning}
+Strategy: ${multiToolAnalysis.suggestedToolTypes.join(', ')}
+→ Consider calling ${Math.min(suggestedTools.length, 3)} tools together in this iteration`;
+  }
+
+  // Progressive strategy info
+  const progressiveInfo = TOOL_CONFIG.PROGRESSIVE_STRATEGY.ENABLE_PROGRESSIVE_GATHERING
+    ? `\n\nPROGRESSIVE DATA GATHERING (Iteration ${currentIteration + 1}):
+- Initial limit: ${TOOL_CONFIG.PROGRESSIVE_STRATEGY.INITIAL_LIMIT}
+- Current iteration multiplier: ${Math.pow(TOOL_CONFIG.PROGRESSIVE_STRATEGY.EXPAND_MULTIPLIER, currentIteration)}x
+- Strategy: Start small, expand if insufficient data
+- If data seems incomplete or you need more context, call tools again with expanded parameters`
+    : '';
+
+  // Check if tools are available
+  const hasTools = availableTools && availableTools.length > 0;
+
+  if (!hasTools) {
+    // No tools available at all
+    return `You are an AI assistant for a laundromat management system. Today is ${dateStr}.
+
+QUERY: "${userQuery}"
+
+Tools are not available. Respond helpfully with general information.`;
+  }
+
+  // Tools are available - let Claude decide when to use them
   const basePrompt = `You are an AI assistant for a laundromat management system. Today is ${dateStr}.
 
-AVAILABLE TOOLS: ${availableTools.map(t => `${t.name} - ${t.description}`).join(', ')}
+QUERY: "${userQuery}"
+ITERATION: ${currentIteration + 1}
 
-QUERY ANALYSIS:
-User Query: "${userQuery}"
-Suggested Tools: ${suggestedTools.join(', ')}
-${dateParams ? `Detected Date Parameters: ${JSON.stringify(dateParams)}` : 'No specific date parameters detected'}`;
+🔍 QUERY TYPE DECISION:
+Before responding, determine the query type:
+
+**CONVERSATIONAL** (no tools needed):
+- Greetings: "hello", "hi", "thanks"
+- Explanations: "what is a customer?", "explain revenue"
+- Help requests: "what can you do?", "how do you work?"
+- General advice: "how to improve business?", "tips for laundry"
+→ Just respond naturally, no tools needed
+
+**DATA QUERY** (tools required):
+- Counts: "how many customers?", "total orders?"
+- Facts: "what was March revenue?", "show me orders"
+- Lists: "get customers", "list pickups today"
+- Analysis: "which users are at risk?", "analyze revenue"
+→ MUST use tools, NEVER invent data
+
+${suggestedTools.length > 0 ? `SUGGESTED TOOLS: ${suggestedTools.slice(0, 3).join(', ')}` : ''}
+${dateParams ? `DATE PARAMS: ${JSON.stringify(dateParams)}` : ''}
+${toolParameterGuidance ? `\nPARAMETERS:\n${toolParameterGuidance}` : ''}${multiToolGuidance}${progressiveInfo ? '\n' + progressiveInfo : ''}`;
 
   if (mode === 'simple') {
     return `${basePrompt}
 
-SIMPLE MODE - Smart Tool Selection:
+📋 IF THIS IS A DATA QUERY (you determined it needs tools):
 
-TOOL SELECTION PRIORITY:
-${suggestedTools.length > 0 ?
-  suggestedTools.map((tool, idx) => `${idx + 1}. ${tool} - Most relevant for this query`).join('\n') :
-  'No specific tools suggested - analyze query and available tools to select most appropriate ones'
-}
+🔧 MULTI-TOOL PLANNING:
+- Analyze what data you need
+- If query needs 2+ data sources, call ALL tools at once
+- Examples:
+  • "revenue and customers" → call 2 tools together
+  • "compare Jan vs Feb" → call tool twice with different dates
+  • "orders with customer info" → call 2 tools together
 
-DATE PARAMETER INJECTION:
-${dateParams ?
-  `IMPORTANT: Add these date parameters to your tool calls: ${JSON.stringify(dateParams)}` :
-  'No date parameters detected. Use current date context if needed.'
-}
+⚠️ MANDATORY PARAMETER ENFORCEMENT:
+- Use EXACT parameters shown above
+- DO NOT use show_limit: 100 (use what's shown above!)
+- Call ALL needed tools immediately (no "I'll get..." preamble)
+- WAIT for all results
+- Use ONLY real data from results
+- NEVER invent names, numbers, or information
 
-EXECUTION GUIDELINES:
-1. Use ONLY the suggested tools unless absolutely necessary
-2. Apply detected date parameters automatically
-3. Validate results match the user's question intent
-4. Provide direct, minimal responses`;
+❌ FORBIDDEN for data queries:
+- Answering without calling tools
+- Making up data or examples
+- Using your own knowledge for facts/numbers
+- Calling one tool, waiting, then calling another (call together!)
+
+✅ REQUIRED for data queries:
+- Call ALL needed tools with exact parameters
+- Read actual results
+- Quote real values from results
+- If no data, say "No data available"
+
+🚨 For DATA queries: Every name, number, date MUST come from tool result!
+
+📋 IF THIS IS CONVERSATIONAL (no tools needed):
+Just respond naturally and helpfully!`;
 
   } else {
     return `${basePrompt}
 
-ANALYSIS MODE - Comprehensive Intelligence:
+📋 IF THIS IS A DATA/ANALYSIS QUERY (needs tools):
 
-TOOL CHAINING STRATEGY:
-${suggestedTools.length > 0 ?
-  `Primary Tools: ${suggestedTools.join(', ')}\nUse these as starting points, then chain additional tools as needed for comprehensive analysis.` :
-  'Analyze available tools and select appropriate combinations for comprehensive insights.'
-}
+🔧 MULTI-TOOL PLANNING (IMPORTANT):
+- Analyze the full query before calling tools
+- If you need 2+ data sources, call ALL tools in ONE response
+- Examples:
+  • "revenue trends and top customers" → call revenue tool + customer tool together
+  • "Jan vs Feb comparison" → call tool TWICE with different dates in same response
+  • "complete business overview" → call 3-4 tools together
+- This is FASTER than calling tools one by one
 
-SMART DATE HANDLING:
-${dateParams ?
-  `Auto-detected parameters: ${JSON.stringify(dateParams)}\nApply these to all relevant tool calls and consider comparative analysis with other time periods.` :
-  'No specific dates detected. Consider current period analysis and historical comparisons.'
-}
+⚠️ MANDATORY PARAMETER ENFORCEMENT:
+- Use EXACT parameters shown above
+- Expected limit: ${TOOL_CONFIG.PROGRESSIVE_STRATEGY.INITIAL_LIMIT * Math.pow(TOOL_CONFIG.PROGRESSIVE_STRATEGY.EXPAND_MULTIPLIER, currentIteration)}
+- Call ALL needed tools immediately (no preamble)
+- Wait for all actual results
+- Use ONLY real data from results
+- NEVER invent data or examples
 
-VALIDATION REQUIREMENTS:
-1. Ensure each tool result matches the query intent
-2. Cross-validate data consistency between tools
-3. Retry with different parameters if results seem irrelevant
-4. Provide comprehensive analysis combining all relevant data`;
+❌ FORBIDDEN for data queries:
+- Making up names, numbers, scenarios
+- Answering without tools
+- Using assumptions instead of real data
+- Sequential tool calling (call one, wait, call another) - call ALL together!
+
+✅ REQUIRED for data queries:
+- Identify ALL data needs from query
+- Call ALL needed tools together with exact parameters
+- Read all actual results carefully
+- Extract real data (IDs, names, values)
+- Synthesize insights from multiple data sources
+- If insufficient, say "Need more data"
+
+🚨 For DATA: Every fact MUST come from tool result!
+
+📋 IF THIS IS CONVERSATIONAL/ADVISORY:
+Respond naturally with your knowledge!`;
   }
+}
+
+// Intelligent conversation history filtering to prevent prompt size issues
+export function filterConversationHistory(conversationHistory: any[]): any[] {
+  if (!TOOL_CONFIG.HISTORY_MANAGEMENT.FILTER_TOOL_RESULTS) {
+    return conversationHistory;
+  }
+
+  const filtered = conversationHistory.map(msg => {
+    // For user messages, check if they contain tool_result content (from previous iterations)
+    if (msg.role === 'user') {
+      // If it's a tool result message, create a compact summary
+      if (Array.isArray(msg.content) && msg.content.some((c: any) => c.type === 'tool_result')) {
+        // Create summary of tool results instead of full data
+        const summaries = msg.content
+          .filter((c: any) => c.type === 'tool_result')
+          .map((c: any) => {
+            try {
+              const parsed = typeof c.content === 'string' ? JSON.parse(c.content) : c.content;
+              return `[${parsed.data_summary || `Tool completed`}]`;
+            } catch {
+              return '[Tool result]';
+            }
+          });
+
+        // Replace with compact summary
+        return {
+          role: 'user',
+          content: summaries.join(', ')
+        };
+      }
+      // Preserve regular user messages
+      return msg;
+    }
+
+    // For assistant messages with toolUses (your chat format)
+    if (msg.role === 'assistant' && msg.toolUses && Array.isArray(msg.toolUses)) {
+      // Keep minimal tool info for context
+      const filteredToolUses = msg.toolUses.map((toolUse: any) => ({
+        name: toolUse.name,
+        status: toolUse.status,
+        // Keep only summary, not full result
+        summary: toolUse.result ? `Result: ${toolUse.status}` : undefined
+      }));
+
+      return {
+        ...msg,
+        content: msg.content, // Keep text content
+        toolUses: filteredToolUses
+      };
+    }
+
+    // For assistant messages with content array (Anthropic format)
+    if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+      const filteredContent = msg.content.map((contentItem: any) => {
+        // Preserve text responses (these are the conversational responses)
+        if (contentItem.type === 'text') {
+          return contentItem;
+        }
+
+        // Keep minimal tool_use info (name + input summary)
+        if (contentItem.type === 'tool_use') {
+          return {
+            type: 'tool_use',
+            id: contentItem.id,
+            name: contentItem.name,
+            input: {} // Remove input details to save tokens, keep structure
+          };
+        }
+
+        // Don't include tool_result in history - they're converted to summaries above
+        if (contentItem.type === 'tool_result') {
+          return null;
+        }
+
+        return contentItem;
+      }).filter((c: any) => c !== null);
+
+      // Keep if we have any content
+      if (filteredContent.length === 0) {
+        return null;
+      }
+
+      return {
+        ...msg,
+        content: filteredContent
+      };
+    }
+
+    return msg;
+  }).filter(msg => msg !== null); // Remove null entries
+
+  // Calculate total size and truncate if necessary
+  return truncateHistoryIfNeeded(filtered);
+}
+
+// Filter tool results specifically for your chat format
+function filterToolResultForChat(result: any): any {
+  if (!result || !result.content) {
+    return result;
+  }
+
+  const maxSize = TOOL_CONFIG.HISTORY_MANAGEMENT.MAX_TOOL_RESULT_SIZE;
+  let resultText = '';
+
+  // Extract text content from result
+  if (Array.isArray(result.content)) {
+    result.content.forEach((item: any) => {
+      if (item.type === 'text') {
+        resultText += item.text;
+      }
+    });
+  }
+
+  // If result is too large, summarize it
+  if (resultText.length > maxSize) {
+    const summary = summarizeToolResult(resultText);
+
+    return {
+      content: [{
+        type: 'text',
+        text: summary
+      }]
+    };
+  }
+
+  return result;
+}
+
+// Filter individual tool results to keep them concise
+function filterToolResult(toolResult: any): any {
+  const maxSize = TOOL_CONFIG.HISTORY_MANAGEMENT.MAX_TOOL_RESULT_SIZE;
+
+  if (!toolResult.content) {
+    return toolResult;
+  }
+
+  let resultText = '';
+
+  // Extract text content from tool result
+  if (Array.isArray(toolResult.content)) {
+    toolResult.content.forEach((item: any) => {
+      if (item.type === 'text') {
+        resultText += item.text;
+      }
+    });
+  } else if (typeof toolResult.content === 'string') {
+    resultText = toolResult.content;
+  }
+
+  // If result is too large, summarize it
+  if (resultText.length > maxSize) {
+    if (TOOL_CONFIG.HISTORY_MANAGEMENT.SUMMARIZE_LARGE_RESULTS) {
+      const summary = summarizeToolResult(resultText, toolResult.tool_use_id);
+
+      return {
+        ...toolResult,
+        content: [{
+          type: 'text',
+          text: summary
+        }]
+      };
+    } else {
+      // Just truncate
+      return {
+        ...toolResult,
+        content: [{
+          type: 'text',
+          text: resultText.substring(0, maxSize) + '... [truncated]'
+        }]
+      };
+    }
+  }
+
+  return toolResult;
+}
+
+// Smart summarization of tool results
+function summarizeToolResult(resultText: string, toolId?: string): string {
+  try {
+    // Try to parse as JSON to understand structure
+    const parsed = JSON.parse(resultText);
+
+    // If it's an array, summarize the count and structure
+    if (Array.isArray(parsed)) {
+      return `[Tool Result Summary: ${parsed.length} items returned]`;
+    }
+
+    // If it's an object with data array (common pattern)
+    if (parsed.data && Array.isArray(parsed.data)) {
+      let summary = `[Tool Result Summary: ${parsed.data.length} records`;
+
+      // Add key metrics if available
+      if (parsed.total_count) summary += `, total_count: ${parsed.total_count}`;
+      if (parsed.message) summary += `, message: "${parsed.message}"`;
+
+      return summary + ']';
+    }
+
+    // If it's an object with count/total information
+    if (parsed.count !== undefined || parsed.total_count !== undefined || parsed.total !== undefined) {
+      const count = parsed.count || parsed.total_count || parsed.total;
+      const message = parsed.message || 'data retrieved';
+      return `[Tool Result Summary: ${count} - ${message}]`;
+    }
+
+    // Generic object summary
+    const keys = Object.keys(parsed);
+    return `[Tool Result Summary: Object with keys: ${keys.slice(0, 3).join(', ')}${keys.length > 3 ? '...' : ''}]`;
+
+  } catch (e) {
+    // If not JSON, provide basic text summary
+    const lines = resultText.split('\n').filter(line => line.trim());
+    if (lines.length > 5) {
+      return `[Tool Result Summary: ${lines.length} lines of data]`;
+    }
+
+    // For short non-JSON results, truncate
+    return resultText.substring(0, 200) + (resultText.length > 200 ? '... [truncated]' : '');
+  }
+}
+
+// Truncate history if total size exceeds limits
+function truncateHistoryIfNeeded(history: any[]): any[] {
+  const maxSize = TOOL_CONFIG.HISTORY_MANAGEMENT.MAX_TOTAL_HISTORY_SIZE;
+
+  let totalSize = JSON.stringify(history).length;
+
+  if (totalSize <= maxSize) {
+    return history;
+  }
+
+  // Remove oldest messages (but preserve recent ones)
+  let truncatedHistory = [...history];
+
+  while (totalSize > maxSize && truncatedHistory.length > 2) {
+    // Remove oldest message (but keep the most recent user message)
+    if (truncatedHistory[0].role === 'user' && truncatedHistory.length > 3) {
+      // Find the next non-user message to remove
+      const indexToRemove = truncatedHistory.findIndex((msg, idx) => idx > 0 && msg.role !== 'user');
+      if (indexToRemove !== -1) {
+        truncatedHistory.splice(indexToRemove, 1);
+      } else {
+        truncatedHistory.shift(); // Remove oldest if no non-user found
+      }
+    } else {
+      truncatedHistory.shift();
+    }
+
+    totalSize = JSON.stringify(truncatedHistory).length;
+  }
+
+  console.log(`📊 History truncated: ${history.length} -> ${truncatedHistory.length} messages (${totalSize} chars)`);
+
+  return truncatedHistory;
 }
 
 export default TOOL_CONFIG;

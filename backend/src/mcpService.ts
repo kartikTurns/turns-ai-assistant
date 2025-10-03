@@ -271,25 +271,53 @@ class MCPService {
   }
 
   private enhanceToolDescription(tool: MCPTool): string {
-    // Enhance the description dynamically based on the tool name
+    // Enhance the description dynamically based on semantic patterns
     const name = tool.name.toLowerCase();
-    
-    // Add contextual hints based on common patterns in tool names
+    const desc = tool.description?.toLowerCase() || '';
+
+    // Start with original description
     let enhancedDesc = tool.description || `Execute ${tool.name} operation`;
-    
-    // Add usage hints based on keywords in the tool name
-    if (name.includes('customer')) {
-      enhancedDesc += ' Use when users ask about customers, customer counts, or customer-related data.';
-    } else if (name.includes('revenue') || name.includes('sales')) {
-      enhancedDesc += ' Use when users ask about revenue, sales, earnings, income, or financial data.';
-    } else if (name.includes('metric') || name.includes('report')) {
-      enhancedDesc += ' Use when users ask for reports, metrics, analytics, or business performance.';
-    } else if (name.includes('transaction')) {
-      enhancedDesc += ' Use when users ask about transactions, transaction history, or transaction details.';
-    } else if (name.includes('inventory')) {
-      enhancedDesc += ' Use when users ask about inventory, stock levels, or product availability.';
+
+    // Define semantic enhancement rules - map tool patterns to user intent
+    const semanticRules = [
+      {
+        toolPatterns: ['customer', 'client', 'user', 'member'],
+        hint: ' Use when users ask about customers, clients, users, members, or customer-related data.'
+      },
+      {
+        toolPatterns: ['order', 'transaction', 'sale', 'purchase'],
+        hint: ' IMPORTANT: Use when users ask about orders, transactions, purchases, AND when users ask about revenue, sales, earnings, income, money, or financial data (these tools contain payment/amount fields that can be summed).'
+      },
+      {
+        toolPatterns: ['metric', 'report', 'analytics', 'stats'],
+        hint: ' Use when users ask for reports, metrics, analytics, statistics, or business performance.'
+      },
+      {
+        toolPatterns: ['inventory', 'stock', 'item', 'product'],
+        hint: ' Use when users ask about inventory, stock levels, items, products, or availability.'
+      },
+      {
+        toolPatterns: ['store', 'location', 'branch'],
+        hint: ' Use when users ask about stores, locations, branches, or outlets.'
+      },
+      {
+        toolPatterns: ['payment', 'invoice', 'billing'],
+        hint: ' Use when users ask about payments, invoices, billing, or financial transactions.'
+      }
+    ];
+
+    // Apply semantic rules
+    for (const rule of semanticRules) {
+      const matchesPattern = rule.toolPatterns.some(pattern =>
+        name.includes(pattern) || desc.includes(pattern)
+      );
+
+      if (matchesPattern) {
+        enhancedDesc += rule.hint;
+        break; // Apply first matching rule only
+      }
     }
-    
+
     return enhancedDesc;
   }
 

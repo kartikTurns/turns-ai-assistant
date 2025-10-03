@@ -13,7 +13,10 @@ import {
   smartToolSelection,
   extractDateParameters,
   validateToolResult,
-  generateEnhancedSystemPrompt
+  generateEnhancedSystemPrompt,
+  generateSmartToolParameters,
+  filterConversationHistory,
+  detectMultiToolNeeds
 } from './config/toolConfig';
 import { generateFallbackContext, getBusinessRecommendations } from './utils/businessKnowledge';
 
@@ -42,7 +45,8 @@ app.use(cors({
   credentials: true,
   allowedHeaders: ['Content-Type', 'X-Access-Token', 'X-Business-Id', 'X-Refresh-Token']
 }));
-app.use(express.json());
+// Increase payload limit for large conversation histories, but we'll filter them
+app.use(express.json({ limit: '10mb' }));
 
 app.get('/health', (req, res) => {
   res.json({ 
@@ -226,19 +230,52 @@ async function handleConversationWithTools(
   }
 
   let messagesToSend: ClaudeMessage[] = [];
-  // Add conversation history if provided, but limit to recent messages
+  // Add conversation history if provided, but limit to recent messages and filter verbose content
   if (conversationHistory && Array.isArray(conversationHistory)) {
-    // Limit conversation history to the last N messages to keep context focused
+    // Extract messages from chat format - handle both flat array and chat object with messages
+    let allMessages: any[] = [];
+
+    if (conversationHistory.length > 0 && conversationHistory[0].messages) {
+      // Handle chat format: [{ messages: [...] }]
+      conversationHistory.forEach(chat => {
+        if (chat.messages && Array.isArray(chat.messages)) {
+          allMessages = allMessages.concat(chat.messages);
+        }
+      });
+    } else {
+      // Handle flat message array format
+      allMessages = conversationHistory;
+    }
+
+    // First, filter out verbose tool content to reduce prompt size
+    const originalSize = JSON.stringify(allMessages).length;
+    const filteredHistory = filterConversationHistory(allMessages);
+    const filteredSize = JSON.stringify(filteredHistory).length;
+
+    // Then limit to recent messages to keep context focused
     const messageLimit = TOOL_CONFIG.AI_SETTINGS.CONTEXT_MESSAGE_LIMIT * 2; // x2 for user+assistant pairs
-    const recentHistory = conversationHistory.slice(-messageLimit);
+    const recentHistory = filteredHistory.slice(-messageLimit);
 
     messagesToSend = recentHistory.map((msg: any) => ({
       role: msg.role as 'user' | 'assistant',
       content: msg.content,
     }));
 
-    if (TOOL_CONFIG.LOGGING.VERBOSE || TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
-      console.log(`Context: Using ${recentHistory.length} recent messages from ${conversationHistory.length} total messages`);
+    const finalSize = JSON.stringify(messagesToSend).length;
+    const reductionPercent = originalSize > 0 ? Math.round((1 - finalSize / originalSize) * 100) : 0;
+
+    if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
+      console.log(`📊 History: ${allMessages.length} -> ${filteredHistory.length} -> ${recentHistory.length} messages`);
+      console.log(`📉 Size: ${(originalSize / 1024).toFixed(1)}KB -> ${(finalSize / 1024).toFixed(1)}KB (${reductionPercent}% reduction)`);
+    }
+
+    // Safety check: If still too large, keep only the most recent messages
+    if (finalSize > TOOL_CONFIG.HISTORY_MANAGEMENT.MAX_TOTAL_HISTORY_SIZE) {
+      console.warn(`⚠️ History still too large (${(finalSize / 1024).toFixed(1)}KB), keeping only last 2 messages`);
+      messagesToSend = recentHistory.slice(-2).map((msg: any) => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+      }));
     }
   }
 
@@ -254,34 +291,51 @@ async function handleConversationWithTools(
   // Store the original user message for context
   const originalUserMessage = message;
 
-  // Use config to determine if we should provide tools and what mode to use
-  const shouldProvideTools = shouldUseToolsForMessage(originalUserMessage);
+  // ALWAYS provide tools if MCP is ready - let Claude decide if they're needed!
+  // Claude is smart enough to know when to use tools vs when to just respond
+  const mcpTools = mcpService.isReady() ? mcpService.getClaudeTools() : [];
+
+  // Determine query mode for response style
   const queryMode = getQueryMode(originalUserMessage);
+
+  // Detect if multi-tool execution is recommended
+  const multiToolAnalysis = detectMultiToolNeeds(originalUserMessage);
 
   if (TOOL_CONFIG.LOGGING.VERBOSE) {
     console.log(`Message: "${originalUserMessage}"`);
-    console.log(`Should use tools: ${shouldProvideTools}`);
+    console.log(`Tools available: ${mcpTools.length > 0 ? 'Yes' : 'No'}`);
     console.log(`Query mode: ${queryMode}`);
+    if (multiToolAnalysis.needsMultipleTools) {
+      console.log(`🔗 Multi-tool scenario detected: ${multiToolAnalysis.reasoning}`);
+      console.log(`   Suggested strategies: ${multiToolAnalysis.suggestedToolTypes.join(', ')}`);
+    }
   }
-
-  // Add MCP tools only if needed
-  const mcpTools = mcpService.isReady() && shouldProvideTools ? mcpService.getClaudeTools() : [];
 
   let conversationComplete = false;
   let currentIteration = 0;
-  // Adjust max iterations based on query mode
-  const maxIterations = queryMode === 'simple' ? 2 : TOOL_CONFIG.AI_SETTINGS.MAX_ITERATIONS;
+  // Adjust max iterations based on query mode - allow more for progressive gathering
+  const maxIterations = queryMode === 'simple' ? 5 : TOOL_CONFIG.AI_SETTINGS.MAX_ITERATIONS;
 
-  // Generate enhanced system prompt using smart tool selection and date detection
-  const systemPrompt = generateEnhancedSystemPrompt(new Date(), mcpTools, originalUserMessage, queryMode);
+  // Track tool calls to prevent excessive iterations and monitor data sufficiency
+  let toolCallHistory: { toolName: string, params: any, recordCount?: number }[] = [];
+  let totalRecordsGathered = 0;
 
   while (!conversationComplete && currentIteration < maxIterations) {
+    // Generate system prompt with current iteration for progressive parameter guidance
+    const systemPrompt = generateEnhancedSystemPrompt(
+      new Date(),
+      mcpTools,
+      originalUserMessage,
+      queryMode,
+      currentIteration
+    );
+
     currentIteration++;
 
     if (TOOL_CONFIG.LOGGING.VERBOSE || TOOL_CONFIG.LOGGING.LOG_MULTI_TOOL_REASONING) {
       console.log(`🔄 Starting iteration ${currentIteration}/${maxIterations} for multi-tool workflow`);
       if (currentIteration > 1) {
-        console.log(`📋 Previous iterations have executed tools, continuing reasoning chain...`);
+        console.log(`📋 Progressive gathering: iteration ${currentIteration}, limits expanded by ${Math.pow(TOOL_CONFIG.PROGRESSIVE_STRATEGY.EXPAND_MULTIPLIER, currentIteration - 1)}x`);
       }
     }
 
@@ -322,9 +376,37 @@ async function handleConversationWithTools(
     }
 
     const startTime = Date.now();
-    const response = await anthropic.messages.create(createParams);
+    let response;
+
+    try {
+      response = await anthropic.messages.create(createParams);
+    } catch (error: any) {
+      // Handle rate limit errors
+      if (error.status === 429) {
+        const retryAfter = parseInt(error.headers?.['retry-after'] || '60');
+        console.error(`⚠️ Rate limit hit! Retry after ${retryAfter}s. Input tokens remaining: ${error.headers?.['anthropic-ratelimit-input-tokens-remaining'] || 'unknown'}`);
+
+        // Send error to user
+        res.write(`data: ${JSON.stringify({
+          type: 'error',
+          error: 'Rate limit exceeded',
+          message: `API rate limit reached. Please wait ${retryAfter} seconds and try again.`,
+          retryAfter: retryAfter
+        })}\n\n`);
+        res.end();
+        return;
+      }
+      throw error;
+    }
+
     const responseTime = Date.now() - startTime;
-    
+
+    // Log token usage to monitor rate limits
+    const usage = (response as any).usage;
+    if (usage && TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
+      console.log(`🎯 Tokens - Input: ${usage.input_tokens || 0}, Output: ${usage.output_tokens || 0}, Total: ${(usage.input_tokens || 0) + (usage.output_tokens || 0)}`);
+    }
+
     if (TOOL_CONFIG.LOGGING.LOG_PERFORMANCE) {
       console.log(`Claude response time: ${responseTime}ms`);
     }
@@ -334,9 +416,18 @@ async function handleConversationWithTools(
     let assistantContent: any[] = [];
     let toolResults: any[] = [];
 
+    // First pass: collect all content and identify tool uses
+    const toolUsesToExecute: any[] = [];
+
     for (const content of response.content) {
       if (content.type === 'text') {
         hasTextContent = true;
+
+        // Log if Claude is providing text without calling tools first
+        if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS && !hasToolUse && content.text.length > 50) {
+          console.warn(`⚠️ Claude generating long text response without calling tools!`);
+          console.warn(`Text preview: ${content.text.substring(0, 100)}...`);
+        }
 
         // Stream text content to user
         const streamData = {
@@ -355,36 +446,84 @@ async function handleConversationWithTools(
         assistantContent.push(content);
       } else if (content.type === 'tool_use') {
         hasToolUse = true;
-        
-        if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
-          console.log(`Tool call: ${content.name}`, content.input);
+        toolUsesToExecute.push(content);
+        assistantContent.push(content);
+      }
+    }
+
+    // Log multi-tool execution plan
+    if (toolUsesToExecute.length > 1 && TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
+      console.log(`🎯 Multi-tool execution: Claude called ${toolUsesToExecute.length} tools in parallel`);
+      console.log(`   Tools: ${toolUsesToExecute.map(t => t.name).join(', ')}`);
+    }
+
+    // Second pass: execute all tool uses in PARALLEL
+    const toolExecutionPromises = toolUsesToExecute.map(async (content) => {
+      // Track this tool call for efficiency monitoring (will update with record count later)
+      const currentToolCall = { toolName: content.name, params: content.input, recordCount: 0 };
+      toolCallHistory.push(currentToolCall);
+
+      // Check for duplicate or inefficient tool calls
+      const duplicateCall = toolCallHistory.slice(0, -1).find(
+        prev => prev.toolName === content.name &&
+        JSON.stringify(prev.params) === JSON.stringify(content.input)
+      );
+
+      if (duplicateCall && TOOL_CONFIG.EFFICIENCY.DUPLICATE_CALL_WARNING && TOOL_CONFIG.LOGGING.LOG_EFFICIENCY_WARNINGS) {
+        console.warn(`⚠️ Duplicate tool call detected: ${content.name} with same parameters`);
+      }
+
+      // Check for potentially inefficient parameters
+      const input = content.input as any;
+      if (input?.show_limit > TOOL_CONFIG.EFFICIENCY.MAX_REASONABLE_LIMIT && TOOL_CONFIG.LOGGING.LOG_EFFICIENCY_WARNINGS) {
+        console.warn(`⚠️ Large limit detected: ${content.name} with show_limit: ${input.show_limit} (recommended max: ${TOOL_CONFIG.EFFICIENCY.MAX_REASONABLE_LIMIT})`);
+      }
+
+      if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
+        console.log(`Tool call: ${content.name}`, content.input);
+        console.log(`Total tool calls this conversation: ${toolCallHistory.length}`);
+
+        // Log progressive gathering info and validate compliance
+        if (input?.show_limit && TOOL_CONFIG.PROGRESSIVE_STRATEGY.ENABLE_PROGRESSIVE_GATHERING) {
+          const expectedLimit = TOOL_CONFIG.PROGRESSIVE_STRATEGY.INITIAL_LIMIT *
+            Math.pow(TOOL_CONFIG.PROGRESSIVE_STRATEGY.EXPAND_MULTIPLIER, currentIteration - 1);
+          const actualLimit = input.show_limit;
+
+          console.log(`📊 Progressive strategy - Iteration ${currentIteration}: Expected ~${Math.round(expectedLimit)}, Actual: ${actualLimit}`);
+
+          // Warn if Claude is disobeying parameters
+          if (actualLimit > expectedLimit * 2) {
+            console.warn(`⚠️⚠️⚠️ PARAMETER VIOLATION: Claude used show_limit=${actualLimit} but should use ~${Math.round(expectedLimit)}`);
+            console.warn(`⚠️ This wastes tokens and defeats progressive gathering!`);
+          }
         }
+      }
 
-        // Notify user about tool execution
-        const toolData = {
-          type: 'tool_use',
-          id: content.id,
+      // Notify user about tool execution
+      const toolData = {
+        type: 'tool_use',
+        id: content.id,
+        name: content.name,
+        input: content.input,
+        messageId: messageId,
+        timestamp: timestamp,
+        displayText: `🔧 Fetching ${content.name.replace(/_/g, ' ')}...`,
+        isCollapsible: TOOL_CONFIG.UI.COLLAPSE_TOOL_DETAILS,
+        status: 'executing'
+      };
+      res.write(`data: ${JSON.stringify(toolData)}\n\n`);
+
+      // Execute the tool
+      try {
+        const toolStartTime = Date.now();
+        const toolResult = await mcpService.executeToolCall(MCP_SERVER_URL, {
           name: content.name,
-          input: content.input,
-          messageId: messageId,
-          timestamp: timestamp,
-          displayText: `🔧 Fetching ${content.name.replace(/_/g, ' ')}...`,
-          isCollapsible: TOOL_CONFIG.UI.COLLAPSE_TOOL_DETAILS,
-          status: 'executing'
-        };
-        res.write(`data: ${JSON.stringify(toolData)}\n\n`);
-
-        // Execute the tool
-        try {
-          const toolStartTime = Date.now();
-          const toolResult = await mcpService.executeToolCall(MCP_SERVER_URL, {
-            name: content.name,
-            arguments: content.input,
-          }, {
-            accessToken,
-            businessId
-          });
-          const toolExecutionTime = Date.now() - toolStartTime;
+          arguments: content.input,
+        }, {
+          accessToken,
+          businessId
+        });
+        const toolExecutionTime = Date.now() - toolStartTime;
 
           if (TOOL_CONFIG.LOGGING.LOG_PERFORMANCE) {
             console.log(`Tool ${content.name} execution time: ${toolExecutionTime}ms`);
@@ -423,8 +562,41 @@ async function handleConversationWithTools(
           };
           res.write(`data: ${JSON.stringify(toolCompleteData)}\n\n`);
 
-          assistantContent.push(content);
+          // Note: content already added to assistantContent in first pass
           // Analyze tool result quality and add context for fallback reasoning
+
+          // Track record count for progressive gathering decisions
+          let recordCount = 0;
+          try {
+            let parsedResult;
+            if (toolResult.content && toolResult.content[0] && toolResult.content[0].text) {
+              parsedResult = JSON.parse(toolResult.content[0].text);
+            } else if (typeof toolResult === 'string') {
+              parsedResult = JSON.parse(toolResult);
+            } else {
+              parsedResult = toolResult;
+            }
+
+            if (parsedResult.data && Array.isArray(parsedResult.data)) {
+              recordCount = parsedResult.data.length;
+            } else if (Array.isArray(parsedResult)) {
+              recordCount = parsedResult.length;
+            } else if (parsedResult.total_count) {
+              recordCount = parsedResult.total_count;
+            }
+
+            // Update the last tool call with record count
+            if (toolCallHistory.length > 0) {
+              toolCallHistory[toolCallHistory.length - 1].recordCount = recordCount;
+              totalRecordsGathered += recordCount;
+            }
+
+            if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS && recordCount > 0) {
+              console.log(`📊 Records retrieved: ${recordCount} (total session: ${totalRecordsGathered})`);
+            }
+          } catch (e) {
+            // Parsing failed, skip record counting
+          }
 
           // Apply data filtering for simple queries to reduce data sent to Claude
           let enhancedResult = queryMode === 'simple'
@@ -438,46 +610,46 @@ async function handleConversationWithTools(
             (typeof resultToCheck === 'object' && Object.keys(resultToCheck).length === 0) ||
             (typeof resultToCheck === 'string' && resultToCheck.trim().length === 0);
 
-          const isMinimal = Array.isArray(resultToCheck) && resultToCheck.length < 3;
+          const isMinimal = Array.isArray(resultToCheck) && resultToCheck.length < TOOL_CONFIG.PROGRESSIVE_STRATEGY.MIN_DATA_THRESHOLD;
 
           if (isEmpty) {
-            const businessContext = (TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT && queryMode === 'analysis')
-              ? generateFallbackContext(content.name, content.input, 'empty')
-              : '';
-
-            const recommendations = (TOOL_CONFIG.FALLBACK.SUGGEST_ALTERNATIVES && queryMode === 'analysis')
-              ? getBusinessRecommendations(content.name)
-              : [];
+            // STRICT MODE: No fallback context or fake data generation
+            const businessContext = '';
+            const recommendations: string[] = [];
 
             if (queryMode === 'simple') {
               enhancedResult = {
-                original_result: toolResult,
+                data_summary: 'No data returned',
                 data_quality: 'empty',
                 validation_status: isValidResult,
-                fallback_guidance: `The ${content.name} tool returned no data. Acknowledge this limitation and provide a direct response.`,
+                fallback_guidance: `The ${content.name} tool returned no data. State clearly that no data is available from the system.`,
                 simple_mode: true,
                 query_match_analysis: !isValidResult ? 'Tool result does not match the user query intent' : 'Query intent validated'
               };
             } else {
               enhancedResult = {
-                original_result: toolResult,
+                data_summary: 'No data returned',
                 data_quality: 'empty',
                 validation_status: isValidResult,
-                fallback_guidance: `The ${content.name} tool returned no data. ${businessContext} Please provide expert insights about what this might mean and offer business recommendations despite the lack of data.`,
-                suggested_reasoning: `Consider typical laundromat operations, seasonal patterns, or industry benchmarks that might apply to this scenario.`,
+                fallback_guidance: `The ${content.name} tool returned no data. State clearly that no data is available from the system. Do not generate fake data or examples.`,
+                suggested_reasoning: `Explain that the data is not available and cannot be retrieved from the system.`,
                 business_context: businessContext,
                 recommendations: recommendations.length > 0 ? recommendations : undefined,
                 query_match_analysis: !isValidResult ? 'Tool result validation failed - may not match user query intent' : 'Query intent validated'
               };
             }
           } else if (isMinimal) {
-            const businessContext = (TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT && queryMode === 'analysis')
-              ? generateFallbackContext(content.name, content.input, 'limited')
-              : '';
+            // STRICT MODE: No fallback context or fake data generation
+            const businessContext = '';
+
+            // Create a minimal summary instead of including full result
+            const dataSummary = `Tool returned ${recordCount} records (minimal data)`;
 
             if (queryMode === 'simple') {
               enhancedResult = {
-                original_result: toolResult,
+                data_summary: dataSummary,
+                record_count: recordCount,
+                actual_data: enhancedResult, // Use the already filtered result for simple mode
                 data_quality: 'limited',
                 validation_status: isValidResult,
                 fallback_guidance: `The ${content.name} tool returned minimal data. Present what's available directly.`,
@@ -486,15 +658,31 @@ async function handleConversationWithTools(
               };
             } else {
               enhancedResult = {
-                original_result: toolResult,
+                data_summary: dataSummary,
+                record_count: recordCount,
                 data_quality: 'limited',
                 validation_status: isValidResult,
-                fallback_guidance: `The ${content.name} tool returned minimal data. Extract maximum value from these results and supplement with business reasoning and industry knowledge.`,
+                fallback_guidance: `The ${content.name} tool returned minimal data (${recordCount} records). Extract maximum value from these results.`,
                 data_enhancement_suggestions: 'Consider what additional context or calculations could make this data more valuable.',
                 business_context: businessContext,
                 query_match_analysis: !isValidResult ? 'Limited data validation failed - may not fully match user query' : 'Data validates against query intent'
               };
             }
+          } else {
+            // Data looks good - but still create a summary to reduce payload size
+            const dataSummary = recordCount > 0
+              ? `Tool returned ${recordCount} records`
+              : 'Tool returned data successfully';
+
+            // For successful results, include the filtered data but with a summary wrapper
+            enhancedResult = {
+              data_summary: dataSummary,
+              record_count: recordCount,
+              actual_data: enhancedResult, // Use the already filtered result
+              data_quality: 'good',
+              validation_status: isValidResult,
+              query_match_analysis: isValidResult ? 'Data validates against query intent' : 'Validation warning'
+            };
           }
 
           toolResults.push({
@@ -502,6 +690,13 @@ async function handleConversationWithTools(
             tool_use_id: content.id,
             content: JSON.stringify(enhancedResult)
           });
+
+          // Return success for this tool execution
+          return {
+            success: true,
+            toolId: content.id,
+            recordCount: recordCount
+          };
 
         } catch (toolError) {
           if (TOOL_CONFIG.LOGGING.LOG_ERRORS) {
@@ -522,29 +717,24 @@ async function handleConversationWithTools(
           };
           res.write(`data: ${JSON.stringify(toolErrorData)}\n\n`);
 
-          assistantContent.push(content);
+          // Note: content already added to assistantContent in first pass
 
-          // Enhanced error context for intelligent fallback
-          const businessContext = (TOOL_CONFIG.FALLBACK.PROVIDE_BUSINESS_CONTEXT && queryMode === 'analysis')
-            ? generateFallbackContext(content.name, content.input, 'failed')
-            : '';
-
-          const recommendations = (TOOL_CONFIG.FALLBACK.SUGGEST_ALTERNATIVES && queryMode === 'analysis')
-            ? getBusinessRecommendations(content.name)
-            : [];
+          // STRICT MODE: No fallback context or fake data generation
+          const businessContext = '';
+          const recommendations: string[] = [];
 
           const errorContext = queryMode === 'simple' ? {
             tool_name: content.name,
             tool_input: content.input,
             error_message: toolError instanceof Error ? toolError.message : 'Tool execution failed',
-            fallback_guidance: `The ${content.name} tool failed. Acknowledge the failure and provide a direct response that data is unavailable.`,
+            fallback_guidance: `The ${content.name} tool failed. State clearly that the system cannot retrieve this data at the moment.`,
             data_quality: 'failed',
             simple_mode: true
           } : {
             tool_name: content.name,
             tool_input: content.input,
             error_message: toolError instanceof Error ? toolError.message : 'Tool execution failed',
-            fallback_guidance: `The ${content.name} tool failed. Please provide an expert-level response using business reasoning and industry knowledge. Acknowledge the data limitation and offer valuable insights despite the tool failure.`,
+            fallback_guidance: `The ${content.name} tool failed. State clearly that the system cannot retrieve this data. Do not generate fake data or examples.`,
             business_context: businessContext,
             recommendations: recommendations.length > 0 ? recommendations : undefined,
             data_quality: 'failed'
@@ -555,8 +745,23 @@ async function handleConversationWithTools(
             tool_use_id: content.id,
             content: JSON.stringify(errorContext)
           });
+
+          // Return the tool result object for this execution
+          return {
+            success: false,
+            error: toolError instanceof Error ? toolError.message : 'Tool execution failed'
+          };
         }
-      }
+    });
+
+    // Wait for ALL tool executions to complete in parallel
+    const parallelExecutionStart = Date.now();
+    await Promise.all(toolExecutionPromises);
+    const parallelExecutionTime = Date.now() - parallelExecutionStart;
+
+    if (toolUsesToExecute.length > 1 && TOOL_CONFIG.LOGGING.LOG_PERFORMANCE) {
+      console.log(`⚡ Parallel execution of ${toolUsesToExecute.length} tools completed in ${parallelExecutionTime}ms`);
+      console.log(`   Average time per tool: ${Math.round(parallelExecutionTime / toolUsesToExecute.length)}ms`);
     }
 
     // Add assistant's response to conversation
@@ -603,46 +808,32 @@ async function handleConversationWithTools(
 
       let continuePrompt;
       if (queryMode === 'simple') {
-        // Simple mode: minimal continuation prompts
+        // Simple mode: explicit instructions to use real data
         if (hasFailedTools && successfulToolCount === 0) {
-          continuePrompt = `Tools failed. Provide a direct answer acknowledging data unavailability.${yearContext} Original request: "${originalUserMessage}"`;
+          continuePrompt = `Tools failed. Say: "Data unavailable" - DO NOT make up data!${yearContext}`;
         } else if (hasFailedTools) {
-          continuePrompt = `Use available data to provide a direct answer to: "${originalUserMessage}"${yearContext}`;
+          continuePrompt = `Tool gave you real data. Use ONLY that real data to answer "${originalUserMessage}". DO NOT invent information.${yearContext}`;
         } else {
-          continuePrompt = `Provide the requested data directly without additional analysis.${yearContext} Original request: "${originalUserMessage}"`;
+          if (currentIteration < maxIterations - 1) {
+            continuePrompt = `Tool returned REAL data. Read it carefully. Answer "${originalUserMessage}" using ONLY this actual data. DO NOT make up names/numbers. If need more, say so. DO NOT call tool again.${yearContext}`;
+          } else {
+            continuePrompt = `Use the REAL data from tools to answer "${originalUserMessage}". DO NOT generate fake data. DO NOT call more tools.${yearContext}`;
+          }
         }
       } else {
-        // Analysis mode: comprehensive continuation prompts
+        // Analysis mode: explicit instructions to use real data
         if (currentIteration < maxIterations - 1) {
           if (hasFailedTools && successfulToolCount === 0) {
-            // All tools failed - focus on expert reasoning
-            continuePrompt = `All tools failed to retrieve data. Please provide an expert-level response using your business knowledge and industry expertise. Apply contextual reasoning about laundromat operations, typical business patterns, and actionable insights. Be transparent about data limitations while delivering maximum value through professional analysis.${yearContext}
-
-Original request: "${originalUserMessage}"
-
-Focus on: Business logic, industry benchmarks, operational insights, and practical recommendations.`;
+            continuePrompt = `All tools failed. Say: "Data unavailable" - DO NOT invent data!${yearContext}`;
           } else if (hasFailedTools) {
-            // Some tools failed - combine available data with reasoning
-            continuePrompt = `Some tools succeeded while others failed. Analyze the available data and determine if you need additional information or if you can provide a comprehensive answer using the retrieved data combined with business reasoning. If more tools might help, try them. Otherwise, provide expert insights combining data and professional knowledge.${yearContext}
-
-Original request: "${originalUserMessage}"
-
-Remember: Use both data-driven insights and business expertise to deliver comprehensive value.`;
+            continuePrompt = `Tools gave REAL data. Use ONLY actual data to answer "${originalUserMessage}". DO NOT make up info.${yearContext}`;
           } else {
-            // Normal multi-tool continuation
-            continuePrompt = `Based on the data retrieved, analyze if you need additional information to provide a complete answer. If so, use more tools to gather that data. If you have enough information, provide a comprehensive summary and analysis.${yearContext}
-
-Original request: "${originalUserMessage}"
-
-Remember: You can call more tools if needed to provide better insights, comparisons, or context.`;
+            continuePrompt = `Tool gave REAL data (${toolResults.length} results). Read carefully. Analyze ONLY actual data for "${originalUserMessage}". DO NOT invent examples. If need more, say so (I'll expand to ${TOOL_CONFIG.PROGRESSIVE_STRATEGY.INITIAL_LIMIT * Math.pow(TOOL_CONFIG.PROGRESSIVE_STRATEGY.EXPAND_MULTIPLIER, currentIteration)}). DO NOT call tools.${yearContext}`;
           }
         } else {
-          // Final iteration - synthesize everything
-          if (hasFailedTools && successfulToolCount === 0) {
-            continuePrompt = `Provide your best expert-level response using business knowledge and reasoning, clearly acknowledging the data limitations.${yearContext} Original request: "${originalUserMessage}"`;
-          } else {
-            continuePrompt = `Based on all available information (both data and any limitations encountered), provide a comprehensive, expert-level analysis and recommendations.${yearContext} Original request: "${originalUserMessage}"`;
-          }
+          continuePrompt = hasFailedTools && successfulToolCount === 0
+            ? `Final answer: "Data unavailable" - DO NOT make up data!${yearContext}`
+            : `Final analysis for "${originalUserMessage}" using ONLY real tool data. DO NOT invent. DO NOT call tools.${yearContext}`;
         }
       }
 
