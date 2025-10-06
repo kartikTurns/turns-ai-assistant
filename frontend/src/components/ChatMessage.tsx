@@ -1,5 +1,6 @@
 import type { Message } from '../types';
 import ToolUsage from './ToolUsage';
+import ReactMarkdown from 'react-markdown';
 
 interface ChatMessageProps {
   message: Message;
@@ -68,10 +69,49 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             fontSize: '14px',
             lineHeight: '1.6',
             color: 'black',
-            whiteSpace: 'pre-wrap',
             wordWrap: 'break-word'
-          }}>
-            {message.content}
+          }} className="markdown-content">
+            <ReactMarkdown
+              components={{
+                p: ({ children }) => <p style={{ margin: '0 0 12px 0', whiteSpace: 'pre-wrap' }}>{children}</p>,
+                strong: ({ children }) => <strong style={{ fontWeight: '700', color: '#111827' }}>{children}</strong>,
+                em: ({ children }) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
+                ul: ({ children }) => <ul style={{ margin: '0 0 12px 0', paddingLeft: '24px' }}>{children}</ul>,
+                ol: ({ children }) => <ol style={{ margin: '0 0 12px 0', paddingLeft: '24px' }}>{children}</ol>,
+                li: ({ children }) => <li style={{ margin: '4px 0' }}>{children}</li>,
+                h1: ({ children }) => <h1 style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 16px 0', color: '#111827' }}>{children}</h1>,
+                h2: ({ children }) => <h2 style={{ fontSize: '20px', fontWeight: '700', margin: '0 0 12px 0', color: '#111827' }}>{children}</h2>,
+                h3: ({ children }) => <h3 style={{ fontSize: '16px', fontWeight: '700', margin: '0 0 8px 0', color: '#111827' }}>{children}</h3>,
+                code: ({ children, className }) => {
+                  const isInline = !className;
+                  return isInline ? (
+                    <code style={{
+                      backgroundColor: '#F3F4F6',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      fontSize: '13px',
+                      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, monospace'
+                    }}>{children}</code>
+                  ) : (
+                    <code style={{
+                      display: 'block',
+                      backgroundColor: '#F3F4F6',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, monospace',
+                      overflowX: 'auto',
+                      margin: '0 0 12px 0'
+                    }}>{children}</code>
+                  );
+                },
+                pre: ({ children }) => <pre style={{ margin: 0 }}>{children}</pre>,
+                a: ({ children, href }) => <a href={href} style={{ color: '#3B82F6', textDecoration: 'underline' }} target="_blank" rel="noopener noreferrer">{children}</a>,
+                blockquote: ({ children }) => <blockquote style={{ borderLeft: '4px solid #E5E7EB', paddingLeft: '16px', margin: '0 0 12px 0', color: '#6B7280' }}>{children}</blockquote>,
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
           </div>
         </div>
       </div>
