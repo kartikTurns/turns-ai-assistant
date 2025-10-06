@@ -90,7 +90,7 @@ export default function ChatInput({
             style={{
               width: '100%',
               padding: '18px 70px 18px 20px',
-              border: '2px solid #E5E7EB',
+              border: '2px solid #FECACA',
               borderRadius: '16px',
               fontSize: '15px',
               lineHeight: '1.6',
@@ -113,7 +113,7 @@ export default function ChatInput({
               e.target.style.transform = 'translateY(-1px)';
             }}
             onBlur={(e) => {
-              e.target.style.borderColor = '#E5E7EB';
+              e.target.style.borderColor = '#FECACA';
               e.target.style.backgroundColor = disabled || isSubmitting ? '#F8FAFC' : '#FAFBFC';
               e.target.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)';
               e.target.style.transform = 'translateY(0)';
@@ -129,12 +129,12 @@ export default function ChatInput({
               bottom: '12px',
               padding: '10px',
               backgroundColor: (!message.trim() || isSubmitting || disabled)
-                ? '#E2E8F0'
+                ? '#FFF1EE'
                 : 'linear-gradient(135deg, #FD390E 0%, #E62E08 100%)',
               background: (!message.trim() || isSubmitting || disabled)
-                ? '#E2E8F0'
+                ? '#FFF1EE'
                 : 'linear-gradient(135deg, #FD390E 0%, #E62E08 100%)',
-              color: (!message.trim() || isSubmitting || disabled) ? '#94A3B8' : 'white',
+              color: (!message.trim() || isSubmitting || disabled) ? '#FD390E' : 'white',
               border: 'none',
               borderRadius: '12px',
               fontSize: '12px',
