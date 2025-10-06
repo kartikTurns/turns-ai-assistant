@@ -402,7 +402,7 @@ function App() {
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center px-4">
-                <h1 className="text-2xl font-medium text-gray-900 mb-2">Welcome to PayTurn</h1>
+                <h1 className="text-2xl font-medium text-gray-900 mb-2">Welcome to TurnsIQ</h1>
                 <p className="text-sm text-gray-600 mb-3">How can I help you today?</p>
                 {authParams.accessToken && authParams.businessId && (
                   <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -438,7 +438,7 @@ function App() {
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                         </div>
-                        <span className="text-gray-600 text-sm">PayTurn is thinking...</span>
+                        <span className="text-gray-600 text-sm">TurnsIQ is thinking...</span>
                       </div>
                     </div>
                   </div>

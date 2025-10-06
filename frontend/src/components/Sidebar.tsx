@@ -185,7 +185,7 @@ export default function Sidebar({
     }}>
       {/* Header */}
       <div style={{ padding: '16px', borderBottom: '1px solid #E5E5E5' }}>
-        {/* PayTurn Logo with Bot Icon and Collapse Button */}
+        {/* TurnsIQ Logo with Bot Icon and Collapse Button */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <svg
@@ -195,7 +195,7 @@ export default function Sidebar({
             >
               <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1a7 7 0 0 1-7 7H9a7 7 0 0 1-7-7H1a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2zM9 9a5 5 0 0 0-5 5v3H3v1h1a5 5 0 0 0 5 5h6a5 5 0 0 0 5-5h1v-1h-1v-3a5 5 0 0 0-5-5H9zm2.5 2.5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zM8 13.5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm4 4a2 2 0 0 1-2-2h4a2 2 0 0 1-2 2z"/>
             </svg>
-            <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: 'black' }}>PayTurn</h1>
+            <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: 'black' }}>TurnsIQ</h1>
           </div>
           <button
             onClick={onToggleCollapse}
