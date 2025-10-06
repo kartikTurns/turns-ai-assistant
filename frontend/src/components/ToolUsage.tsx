@@ -16,7 +16,7 @@ function SyntaxHighlightedJSON({ data }: { data: any }) {
             color = '#16A34A'; // string values (green)
           }
         } else if (/true|false/.test(match)) {
-          color = '#9333EA'; // booleans (purple)
+          color = '#FD390E'; // booleans (orange-red)
         } else if (/null/.test(match)) {
           color = '#EF4444'; // null (red)
         } else if (/^-?\d/.test(match)) {
@@ -159,9 +159,9 @@ function CopyButton({ text, label }: { text: string; label: string }) {
         gap: '4px',
         padding: '4px 8px',
         fontSize: '12px',
-        color: isHover ? '#7C3AED' : '#8B5CF6',
-        backgroundColor: isHover ? '#F3F0FF' : 'white',
-        border: '1px solid #C4B5FD',
+        color: isHover ? '#E62E08' : '#FD390E',
+        backgroundColor: isHover ? '#FFF1EE' : 'white',
+        border: '1px solid #FECACA',
         borderRadius: '4px',
         cursor: 'pointer',
         transition: 'all 0.2s ease'
@@ -637,8 +637,8 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
 
   return (
     <div style={{
-      backgroundColor: '#F3F0FF',
-      border: '1px solid #C4B5FD',
+      backgroundColor: '#FFF1EE',
+      border: '1px solid #FECACA',
       borderRadius: '8px',
       padding: '16px'
     }}>
@@ -658,7 +658,7 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
           <div style={{
             width: '20px',
             height: '20px',
-            color: '#8B5CF6',
+            color: '#FD390E',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
@@ -681,7 +681,7 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
             <span style={{ fontSize: '18px' }}>🔧</span>
             <span style={{
               fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-              color: '#6B46C1',
+              color: '#DC2626',
               fontSize: '14px',
               fontWeight: '500'
             }}>
@@ -717,7 +717,7 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
               }}>
                 <span style={{
                   fontWeight: '600',
-                  color: '#6B46C1',
+                  color: '#DC2626',
                   fontSize: '14px'
                 }}>
                   Input:
@@ -729,7 +729,7 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
               </div>
               <div style={{
                 backgroundColor: 'white',
-                border: '1px solid #C4B5FD',
+                border: '1px solid #FECACA',
                 padding: '12px',
                 borderRadius: '8px'
               }}>
@@ -794,9 +794,9 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
                       onMouseLeave={() => setRawButtonHover(false)}
                       style={{
                         fontSize: '12px',
-                        color: rawButtonHover ? '#7C3AED' : '#8B5CF6',
-                        backgroundColor: rawButtonHover ? '#F3F0FF' : 'white',
-                        border: '1px solid #C4B5FD',
+                        color: rawButtonHover ? '#E62E08' : '#FD390E',
+                        backgroundColor: rawButtonHover ? '#FFF1EE' : 'white',
+                        border: '1px solid #FECACA',
                         padding: '4px 8px',
                         borderRadius: '4px',
                         cursor: 'pointer',
@@ -830,7 +830,7 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
               <div>
                 <span style={{
                   fontWeight: '600',
-                  color: '#6B46C1',
+                  color: '#DC2626',
                   fontSize: '14px',
                   display: 'block',
                   marginBottom: '12px'
@@ -838,10 +838,10 @@ export default function ToolUsage({ toolUse }: ToolUsageProps) {
                   Output:
                 </span>
                 <div style={{
-                  color: '#8B5CF6',
+                  color: '#FD390E',
                   fontSize: '14px',
                   backgroundColor: 'white',
-                  border: '1px solid #C4B5FD',
+                  border: '1px solid #FECACA',
                   padding: '16px',
                   borderRadius: '8px',
                   fontStyle: 'italic'

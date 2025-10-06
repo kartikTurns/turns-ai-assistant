@@ -107,9 +107,9 @@ export default function ChatInput({
               boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)'
             }}
             onFocus={(e) => {
-              e.target.style.borderColor = '#8B5CF6';
+              e.target.style.borderColor = '#FD390E';
               e.target.style.backgroundColor = '#FFFFFF';
-              e.target.style.boxShadow = '0 0 0 4px rgba(139, 92, 246, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+              e.target.style.boxShadow = '0 0 0 4px rgba(253, 57, 14, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1)';
               e.target.style.transform = 'translateY(-1px)';
             }}
             onBlur={(e) => {
@@ -130,10 +130,10 @@ export default function ChatInput({
               padding: '10px',
               backgroundColor: (!message.trim() || isSubmitting || disabled)
                 ? '#E2E8F0'
-                : 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+                : 'linear-gradient(135deg, #FD390E 0%, #E62E08 100%)',
               background: (!message.trim() || isSubmitting || disabled)
                 ? '#E2E8F0'
-                : 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+                : 'linear-gradient(135deg, #FD390E 0%, #E62E08 100%)',
               color: (!message.trim() || isSubmitting || disabled) ? '#94A3B8' : 'white',
               border: 'none',
               borderRadius: '12px',
@@ -149,17 +149,17 @@ export default function ChatInput({
               zIndex: 1,
               boxShadow: (!message.trim() || isSubmitting || disabled)
                 ? 'none'
-                : '0 4px 12px rgba(139, 92, 246, 0.3), 0 2px 4px rgba(139, 92, 246, 0.2)',
+                : '0 4px 12px rgba(253, 57, 14, 0.3), 0 2px 4px rgba(253, 57, 14, 0.2)',
               transform: 'scale(1)'
             }}
             onMouseEnter={(e) => {
               if (!(!message.trim() || isSubmitting || disabled)) {
-                e.currentTarget.style.backgroundColor = '#7C3AED';
+                e.currentTarget.style.backgroundColor = '#E62E08';
               }
             }}
             onMouseLeave={(e) => {
               if (!(!message.trim() || isSubmitting || disabled)) {
-                e.currentTarget.style.backgroundColor = '#8B5CF6';
+                e.currentTarget.style.backgroundColor = '#FD390E';
               }
             }}
           >

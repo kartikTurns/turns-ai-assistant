@@ -189,13 +189,13 @@ export default function Sidebar({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <svg
-              style={{ width: '20px', height: '20px', color: 'black' }}
+              style={{ width: '20px', height: '20px', color: '#FD390E' }}
               fill="currentColor"
               viewBox="0 0 24 24"
             >
               <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1a7 7 0 0 1-7 7H9a7 7 0 0 1-7-7H1a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2zM9 9a5 5 0 0 0-5 5v3H3v1h1a5 5 0 0 0 5 5h6a5 5 0 0 0 5-5h1v-1h-1v-3a5 5 0 0 0-5-5H9zm2.5 2.5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zM8 13.5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm4 4a2 2 0 0 1-2-2h4a2 2 0 0 1-2 2z"/>
             </svg>
-            <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: 'black' }}>TurnsIQ</h1>
+            <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: '#FD390E' }}>TurnsIQ</h1>
           </div>
           <button
             onClick={onToggleCollapse}
@@ -224,7 +224,7 @@ export default function Sidebar({
           style={{
             width: '100%',
             backgroundColor: 'white',
-            border: '1px solid #D1D5DB',
+            border: '1px solid #FD390E',
             borderRadius: '8px',
             padding: '10px 12px',
             display: 'flex',
@@ -233,12 +233,18 @@ export default function Sidebar({
             gap: '8px',
             fontSize: '14px',
             fontWeight: '500',
-            color: 'black',
+            color: '#FD390E',
             cursor: 'pointer',
-            transition: 'background-color 0.2s ease'
+            transition: 'all 0.2s ease'
           }}
-          onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#F9FAFB'}
-          onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = 'white'}
+          onMouseEnter={(e) => {
+            (e.target as HTMLButtonElement).style.backgroundColor = '#FD390E';
+            (e.target as HTMLButtonElement).style.color = 'white';
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLButtonElement).style.backgroundColor = 'white';
+            (e.target as HTMLButtonElement).style.color = '#FD390E';
+          }}
         >
           <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -264,17 +270,19 @@ export default function Sidebar({
                   padding: '12px',
                   borderRadius: '8px',
                   cursor: 'pointer',
-                  backgroundColor: currentConversationId === conversation.id ? '#F3F4F6' : 'transparent',
+                  backgroundColor: currentConversationId === conversation.id ? '#FFF1EE' : 'transparent',
                   transition: 'background-color 0.2s ease',
                   position: 'relative'
                 }}
                 onClick={() => onSelectConversation(conversation.id)}
                 onMouseEnter={(e) => {
                   if (currentConversationId !== conversation.id) {
-                    (e.currentTarget as HTMLDivElement).style.backgroundColor = '#F9FAFB';
+                    (e.currentTarget as HTMLDivElement).style.backgroundColor = '#FFF1EE';
                   }
                   const deleteBtn = e.currentTarget.querySelector('.delete-btn') as HTMLElement;
                   if (deleteBtn) deleteBtn.style.opacity = '1';
+                  const title = e.currentTarget.querySelector('.conversation-title') as HTMLElement;
+                  if (title) title.style.color = '#FD390E';
                 }}
                 onMouseLeave={(e) => {
                   if (currentConversationId !== conversation.id) {
@@ -282,24 +290,30 @@ export default function Sidebar({
                   }
                   const deleteBtn = e.currentTarget.querySelector('.delete-btn') as HTMLElement;
                   if (deleteBtn) deleteBtn.style.opacity = '0';
+                  const title = e.currentTarget.querySelector('.conversation-title') as HTMLElement;
+                  if (title) title.style.color = 'black';
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                   <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
-                    <h3 style={{ 
-                      fontSize: '14px', 
-                      fontWeight: '500', 
-                      color: 'black', 
-                      margin: '0 0 4px 0',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
+                    <h3
+                      className="conversation-title"
+                      style={{
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        color: 'black',
+                        margin: '0 0 4px 0',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        transition: 'color 0.2s ease'
+                      }}
+                    >
                       {conversation.title}
                     </h3>
-                    <p style={{ 
-                      fontSize: '12px', 
-                      color: '#6B7280', 
+                    <p style={{
+                      fontSize: '12px',
+                      color: '#6B7280',
                       margin: 0
                     }}>
                       {formatDate(conversation.updatedAt)}
