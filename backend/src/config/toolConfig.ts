@@ -251,15 +251,16 @@ export function generateSystemPrompt(date: Date = new Date(), tools: string[] = 
   const basePrompt = `You are an AI assistant for a laundromat management system. Today is ${dateStr}.\nAvailable tools: ${tools.join(', ')}
 
 CRITICAL: NEVER waste tokens on explanatory text before tool calls. Call tools IMMEDIATELY.
+IMPORTANT: Do NOT use emojis in your responses. Keep all communication professional and text-based only.
 
-🔧 MULTI-TOOL STRATEGY:
+MULTI-TOOL STRATEGY:
 - You can call MULTIPLE tools in a SINGLE response
 - Analyze the query and call ALL needed tools at once
 - This is MORE EFFICIENT than calling one tool, waiting, then calling another
 - Examples:
-  • "revenue and customers" → identify and call relevant tools together
-  • "compare months" → call same tool with different date params at once
-  • "show orders and inventory" → identify and call multiple relevant tools simultaneously
+  - "revenue and customers" -> identify and call relevant tools together
+  - "compare months" -> call same tool with different date params at once
+  - "show orders and inventory" -> identify and call multiple relevant tools simultaneously
 `;
 
   if (mode === 'predictive') {
@@ -267,10 +268,10 @@ CRITICAL: NEVER waste tokens on explanatory text before tool calls. Call tools I
 
     return `${basePrompt}
 
-🔮 PREDICTIVE MODE - Extended Reasoning & Forecasting:
+PREDICTIVE MODE - Extended Reasoning & Forecasting:
 You are in PREDICTIVE MODE with extended thinking enabled. The user wants predictions, forecasts, or future insights.
 
-⚡ AUTOMATIC HISTORICAL DATA GATHERING:
+AUTOMATIC HISTORICAL DATA GATHERING:
 BEFORE making predictions, you MUST gather historical data:
 - Fetch data for the last ${TOOL_CONFIG.PREDICTIVE_MODE.PREFERRED_HISTORICAL_MONTHS} months: ${historicalRanges.map(r => r.label).join(', ')}
 - Call tools MULTIPLE TIMES in parallel with different date parameters
@@ -283,7 +284,7 @@ Example for revenue prediction query:
 4. Use extended thinking to analyze patterns
 5. Generate prediction with confidence score
 
-🧠 EXTENDED THINKING FRAMEWORK:
+EXTENDED THINKING FRAMEWORK:
 Use <thinking> tags to reason through:
 1. **Data Analysis**: Review historical patterns, trends, seasonality
 2. **Pattern Detection**: Identify growth rates, cycles, anomalies
@@ -292,7 +293,7 @@ Use <thinking> tags to reason through:
 5. **Confidence Assessment**: Evaluate data quality and prediction reliability
 6. **Risk Analysis**: Identify potential scenarios and uncertainties
 
-📊 PREDICTIVE ANALYSIS REQUIREMENTS:
+PREDICTIVE ANALYSIS REQUIREMENTS:
 1. **Multi-Period Tool Calls**: Always fetch 3-6 months of historical data in parallel
 2. **Time-Series Construction**: Build month-over-month or week-over-week datasets
 3. **Trend Calculation**: Compute growth rates, averages, standard deviations
@@ -302,7 +303,7 @@ Use <thinking> tags to reason through:
 7. **Scenario Planning**: Provide best-case, likely, worst-case predictions
 8. **Actionable Insights**: Recommend specific actions based on predictions
 
-🎯 PREDICTION OUTPUT FORMAT:
+PREDICTION OUTPUT FORMAT:
 - **Historical Context**: Summarize past ${TOOL_CONFIG.PREDICTIVE_MODE.PREFERRED_HISTORICAL_MONTHS} months trends
 - **Key Patterns**: Growth rate, seasonality, anomalies
 - **Prediction**: Specific forecast with timeframe
@@ -311,7 +312,7 @@ Use <thinking> tags to reason through:
 - **Scenarios**: Best/likely/worst case
 - **Recommendations**: Actionable next steps
 
-⚠️ STRICT REQUIREMENTS:
+STRICT REQUIREMENTS:
 - NEVER predict without historical data (minimum ${TOOL_CONFIG.PREDICTIVE_MODE.MIN_HISTORICAL_MONTHS} months)
 - Call ALL historical data tools in ONE response (parallel execution)
 - Use <thinking> for complex reasoning chains
@@ -944,7 +945,7 @@ Tools are not available. Respond helpfully with general information.`;
 QUERY: "${userQuery}"
 ITERATION: ${currentIteration + 1}
 
-🔍 QUERY TYPE DECISION:
+QUERY TYPE DECISION:
 Before responding, determine the query type:
 
 **CONVERSATIONAL** (no tools needed):
@@ -971,12 +972,12 @@ ${toolParameterGuidance ? `\nPARAMETERS:\n${toolParameterGuidance}` : ''}${multi
 
     return `${basePrompt}
 
-🔮 PREDICTIVE MODE - Extended Reasoning Enabled
+PREDICTIVE MODE - Extended Reasoning Enabled
 
 QUERY: "${userQuery}"
 ITERATION: ${currentIteration + 1}
 
-⚡ STEP 1: AUTOMATIC HISTORICAL DATA COLLECTION
+STEP 1: AUTOMATIC HISTORICAL DATA COLLECTION
 ${currentIteration === 0 ? `
 You MUST fetch historical data FIRST (all in parallel):
 ${historicalRanges.map(r => `- month=${r.month}, year=${r.year} (${r.label})`).join('\n')}
@@ -984,7 +985,7 @@ ${historicalRanges.map(r => `- month=${r.month}, year=${r.year} (${r.label})`).j
 Call the relevant tool(s) ${historicalRanges.length} times with these date parameters IN ONE RESPONSE.
 ` : `Historical data should be available from previous iteration. Proceed to analysis.`}
 
-🧠 STEP 2: EXTENDED THINKING & REASONING
+STEP 2: EXTENDED THINKING & REASONING
 Use <thinking> tags for deep analysis:
 - Review all historical data points
 - Calculate trends, growth rates, moving averages
@@ -994,7 +995,7 @@ Use <thinking> tags for deep analysis:
 - Assess data quality and confidence level
 - Consider multiple scenarios
 
-📊 STEP 3: PREDICTION & INSIGHTS
+STEP 3: PREDICTION & INSIGHTS
 Present your findings:
 1. **Historical Context**: Summarize ${TOOL_CONFIG.PREDICTIVE_MODE.PREFERRED_HISTORICAL_MONTHS}-month trends with key numbers
 2. **Patterns Identified**: Growth rates, seasonality, correlations
@@ -1004,7 +1005,7 @@ Present your findings:
 6. **Recommendations**: Actionable next steps based on prediction
 
 ${suggestedTools.length > 0 ? `
-🔧 SUGGESTED TOOLS FOR THIS QUERY:
+SUGGESTED TOOLS FOR THIS QUERY:
 ${suggestedTools.map(tool => {
   // Generate date parameters for historical data gathering
   const params = historicalRanges.slice(0, 3).map(r => `{month: ${r.month}, year: ${r.year}}`).join(', ');
@@ -1012,7 +1013,7 @@ ${suggestedTools.map(tool => {
 }).join('\n')}
 ` : ''}
 
-⚠️ REQUIREMENTS:
+REQUIREMENTS:
 - ${currentIteration === 0 ? 'Call ALL historical data tools NOW (parallel)' : 'Use existing data to generate prediction'}
 - Use <thinking> for reasoning (you have ${TOOL_CONFIG.AI_SETTINGS.THINKING_BUDGET_TOKENS} token budget)
 - Every prediction needs a confidence score
@@ -1051,18 +1052,18 @@ Prediction: Next month revenue: $17,500 (range $15,500-$19,500, 75% confidence)`
   if (mode === 'simple') {
     return `${basePrompt}
 
-📋 IF THIS IS A DATA QUERY (you determined it needs tools):
+IF THIS IS A DATA QUERY (you determined it needs tools):
 
-🔧 MULTI-TOOL PLANNING:
+MULTI-TOOL PLANNING:
 - Analyze what data you need
 - Identify relevant tools from available tools
 - If query needs 2+ data sources, call ALL tools at once
 - Examples:
-  • Multiple metrics → identify and call multiple relevant tools together
-  • Time comparisons → call same tool with different date parameters
-  • Related data → identify and call relevant tools together
+  - Multiple metrics -> identify and call multiple relevant tools together
+  - Time comparisons -> call same tool with different date parameters
+  - Related data -> identify and call relevant tools together
 
-⚠️ MANDATORY PARAMETER ENFORCEMENT:
+MANDATORY PARAMETER ENFORCEMENT:
 - Use EXACT parameters shown above
 - DO NOT use show_limit: 100 (use what's shown above!)
 - Call ALL needed tools immediately (no "I'll get..." preamble)
@@ -1070,38 +1071,38 @@ Prediction: Next month revenue: $17,500 (range $15,500-$19,500, 75% confidence)`
 - Use ONLY real data from results
 - NEVER invent names, numbers, or information
 
-❌ FORBIDDEN for data queries:
+FORBIDDEN for data queries:
 - Answering without calling tools
 - Making up data or examples
 - Using your own knowledge for facts/numbers
 - Calling one tool, waiting, then calling another (call together!)
 
-✅ REQUIRED for data queries:
+REQUIRED for data queries:
 - Call ALL needed tools with exact parameters
 - Read actual results
 - Quote real values from results
 - If no data, say "No data available"
 
-🚨 For DATA queries: Every name, number, date MUST come from tool result!
+CRITICAL: For DATA queries, every name, number, date MUST come from tool result!
 
-📋 IF THIS IS CONVERSATIONAL (no tools needed):
+IF THIS IS CONVERSATIONAL (no tools needed):
 Just respond naturally and helpfully!`;
 
   } else {
     return `${basePrompt}
 
-📋 IF THIS IS A DATA/ANALYSIS QUERY (needs tools):
+IF THIS IS A DATA/ANALYSIS QUERY (needs tools):
 
-🔧 MULTI-TOOL PLANNING (IMPORTANT):
+MULTI-TOOL PLANNING (IMPORTANT):
 - Analyze the full query before calling tools
 - If you need 2+ data sources, call ALL tools in ONE response
 - Examples:
-  • "revenue trends and top customers" → identify relevant tools and call together
-  • "Jan vs Feb comparison" → call same tool TWICE with different dates in same response
-  • "complete business overview" → identify 3-4 relevant tools and call together
+  - "revenue trends and top customers" -> identify relevant tools and call together
+  - "Jan vs Feb comparison" -> call same tool TWICE with different dates in same response
+  - "complete business overview" -> identify 3-4 relevant tools and call together
 - This is FASTER than calling tools one by one
 
-⚠️ MANDATORY PARAMETER ENFORCEMENT:
+MANDATORY PARAMETER ENFORCEMENT:
 - Use EXACT parameters shown above
 - Expected limit: ${TOOL_CONFIG.PROGRESSIVE_STRATEGY.INITIAL_LIMIT * Math.pow(TOOL_CONFIG.PROGRESSIVE_STRATEGY.EXPAND_MULTIPLIER, currentIteration)}
 - Call ALL needed tools immediately (no preamble)
@@ -1109,13 +1110,13 @@ Just respond naturally and helpfully!`;
 - Use ONLY real data from results
 - NEVER invent data or examples
 
-❌ FORBIDDEN for data queries:
+FORBIDDEN for data queries:
 - Making up names, numbers, scenarios
 - Answering without tools
 - Using assumptions instead of real data
 - Sequential tool calling (call one, wait, call another) - call ALL together!
 
-✅ REQUIRED for data queries:
+REQUIRED for data queries:
 - Identify ALL data needs from query
 - Call ALL needed tools together with exact parameters
 - Read all actual results carefully
@@ -1123,9 +1124,9 @@ Just respond naturally and helpfully!`;
 - Synthesize insights from multiple data sources
 - If insufficient, say "Need more data"
 
-🚨 For DATA: Every fact MUST come from tool result!
+CRITICAL: For DATA queries, every fact MUST come from tool result!
 
-📋 IF THIS IS CONVERSATIONAL/ADVISORY:
+IF THIS IS CONVERSATIONAL/ADVISORY:
 Respond naturally with your knowledge!`;
   }
 }
