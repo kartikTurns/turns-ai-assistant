@@ -75,9 +75,9 @@ export const TOOL_CONFIG = {
 
   AI_SETTINGS: {
     MODEL: 'claude-sonnet-4-20250514',
-    MAX_TOKENS: 4096,  // Balanced for responses
+    MAX_TOKENS: 6096,  // Balanced for responses
     MAX_ITERATIONS: 8,  // Higher iterations for smart progressive data gathering
-    TEMPERATURE: 0.1,   // Lower temperature for consistent reasoning and data handling
+    TEMPERATURE: 0.2,   // Lower temperature for consistent reasoning and data handling
     CONTEXT_MESSAGE_LIMIT: 3,  // Keep 3 pairs (6 messages) with smart filtering
   },
 
