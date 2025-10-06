@@ -19,6 +19,7 @@ import {
   detectMultiToolNeeds
 } from './config/toolConfig';
 import { generateFallbackContext, getBusinessRecommendations } from './utils/businessKnowledge';
+import { predictionCache } from './services/predictionCache';
 
 dotenv.config();
 
@@ -298,6 +299,29 @@ async function handleConversationWithTools(
   // Determine query mode for response style
   const queryMode = getQueryMode(originalUserMessage);
 
+  // Check prediction cache for predictive queries
+  if (queryMode === 'predictive' && TOOL_CONFIG.PREDICTIVE_MODE.CACHE_PREDICTIONS) {
+    const cachedPrediction = predictionCache.getCachedPrediction(originalUserMessage);
+
+    if (cachedPrediction) {
+      console.log(`🎯 Using cached prediction (${Math.round((Date.now() - cachedPrediction.timestamp) / 1000)}s old)`);
+
+      // Stream cached prediction to user
+      const cachedResponse = {
+        type: 'content',
+        text: `[📦 Cached Prediction - ${Math.round((Date.now() - cachedPrediction.timestamp) / 60000)} minutes old]\n\n${JSON.stringify(cachedPrediction.prediction, null, 2)}`,
+        id: messageId,
+        timestamp: timestamp,
+        cached: true
+      };
+
+      res.write(`data: ${JSON.stringify(cachedResponse)}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'done', id: messageId, timestamp })}\n\n`);
+      res.end();
+      return;
+    }
+  }
+
   // Detect if multi-tool execution is recommended
   const multiToolAnalysis = detectMultiToolNeeds(originalUserMessage);
 
@@ -361,9 +385,23 @@ async function handleConversationWithTools(
       system: systemPrompt,
     };
 
-    // Add temperature if specified
-    if (TOOL_CONFIG.AI_SETTINGS.TEMPERATURE) {
-      createParams.temperature = TOOL_CONFIG.AI_SETTINGS.TEMPERATURE;
+    // Enable extended thinking for predictive mode
+    if (queryMode === 'predictive' && TOOL_CONFIG.AI_SETTINGS.ENABLE_EXTENDED_THINKING) {
+      createParams.thinking = {
+        type: 'enabled',
+        budget_tokens: TOOL_CONFIG.AI_SETTINGS.THINKING_BUDGET_TOKENS
+      };
+      // When thinking is enabled, temperature MUST be 1.0
+      createParams.temperature = 1.0;
+
+      if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
+        console.log(`🧠 Extended thinking enabled for predictive mode (budget: ${TOOL_CONFIG.AI_SETTINGS.THINKING_BUDGET_TOKENS} tokens, temp: 1.0)`);
+      }
+    } else {
+      // Use configured temperature for non-predictive modes
+      if (TOOL_CONFIG.AI_SETTINGS.TEMPERATURE) {
+        createParams.temperature = TOOL_CONFIG.AI_SETTINGS.TEMPERATURE;
+      }
     }
 
     // Provide tools on all iterations if they were determined to be needed
@@ -420,11 +458,26 @@ async function handleConversationWithTools(
     const toolUsesToExecute: any[] = [];
 
     for (const content of response.content) {
-      if (content.type === 'text') {
+      if (content.type === 'thinking') {
+        // Extended thinking content - stream to user as special type
+        if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
+          console.log(`🧠 Claude is reasoning (${content.thinking?.length || 0} chars)...`);
+        }
+
+        const thinkingData = {
+          type: 'thinking',
+          text: content.thinking || '',
+          id: messageId,
+          timestamp: timestamp,
+        };
+        res.write(`data: ${JSON.stringify(thinkingData)}\n\n`);
+
+        assistantContent.push(content);
+      } else if (content.type === 'text') {
         hasTextContent = true;
 
-        // Log if Claude is providing text without calling tools first
-        if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS && !hasToolUse && content.text.length > 50) {
+        // Log if Claude is providing text without calling tools first (except in predictive mode where thinking comes first)
+        if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS && !hasToolUse && content.text.length > 50 && queryMode !== 'predictive') {
           console.warn(`⚠️ Claude generating long text response without calling tools!`);
           console.warn(`Text preview: ${content.text.substring(0, 100)}...`);
         }
@@ -916,10 +969,41 @@ app.post('/api/cache/clear', (req, res) => {
 
 // Add endpoint to get cache statistics
 app.get('/api/cache/stats', (req, res) => {
-  const stats = mcpService.getCacheStats();
+  const toolCacheStats = mcpService.getCacheStats();
+  const predictionCacheStats = predictionCache.getStats();
+
   res.json({
-    ...stats,
-    cacheTimeout: TOOL_CONFIG.PERFORMANCE.CACHE_TIMEOUT_MS,
+    toolCache: {
+      ...toolCacheStats,
+      timeout: TOOL_CONFIG.PERFORMANCE.CACHE_TIMEOUT_MS,
+    },
+    predictionCache: {
+      ...predictionCacheStats,
+      timeout: TOOL_CONFIG.PREDICTIVE_MODE.PREDICTION_CACHE_TTL,
+      enabled: TOOL_CONFIG.PREDICTIVE_MODE.CACHE_PREDICTIONS,
+      recentPredictions: predictionCache.getAllCached().slice(0, 10)
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Clear prediction cache endpoint
+app.post('/api/predictions/cache/clear', (req, res) => {
+  predictionCache.clearCache();
+  res.json({
+    success: true,
+    message: 'Prediction cache cleared',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Get all cached predictions endpoint
+app.get('/api/predictions/cached', (req, res) => {
+  const cached = predictionCache.getAllCached();
+  res.json({
+    predictions: cached,
+    count: cached.length,
+    enabled: TOOL_CONFIG.PREDICTIVE_MODE.CACHE_PREDICTIONS,
     timestamp: new Date().toISOString()
   });
 });

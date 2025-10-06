@@ -58,6 +58,19 @@ export const TOOL_CONFIG = {
     'performance review', 'business intelligence'
   ],
 
+  // Keywords that trigger PREDICTIVE mode with heavy reasoning
+  PREDICTIVE_KEYWORDS: [
+    'predict', 'prediction', 'forecast', 'foreseeable', 'future',
+    'will', 'going to', 'expect', 'expected', 'expecting',
+    'likely', 'probability', 'chance', 'potential', 'anticipated',
+    'next month', 'next year', 'upcoming', 'projected', 'projection',
+    'trend forecast', 'what if', 'scenario', 'simulate', 'simulation',
+    'pattern', 'seasonal prediction', 'estimate', 'risk', 'opportunity',
+    'recommend', 'recommendation', 'should we', 'what should',
+    'correlation', 'relationship between', 'impact of', 'effect of',
+    'churn', 'retention forecast', 'customer lifetime', 'LTV'
+  ],
+
   // Only obvious non-data conversations
   EXCLUDE_KEYWORDS: [
     'hi', 'hello', 'hey', 'thanks', 'bye', 'help',
@@ -75,10 +88,27 @@ export const TOOL_CONFIG = {
 
   AI_SETTINGS: {
     MODEL: 'claude-sonnet-4-20250514',
-    MAX_TOKENS: 6096,  // Balanced for responses
+    MAX_TOKENS: 16000,  // High limit for extended thinking + response
     MAX_ITERATIONS: 8,  // Higher iterations for smart progressive data gathering
     TEMPERATURE: 0.2,   // Lower temperature for consistent reasoning and data handling
     CONTEXT_MESSAGE_LIMIT: 3,  // Keep 3 pairs (6 messages) with smart filtering
+
+    // Extended thinking for predictive mode
+    ENABLE_EXTENDED_THINKING: true,
+    THINKING_BUDGET_TOKENS: 10000,  // Budget for reasoning (10k tokens for thinking)
+  },
+
+  // Predictive reasoning configuration
+  PREDICTIVE_MODE: {
+    ENABLE: true,
+    MIN_HISTORICAL_MONTHS: 3,  // Minimum months of data for predictions
+    PREFERRED_HISTORICAL_MONTHS: 6,  // Ideal historical window
+    AUTO_FETCH_HISTORICAL: true,  // Automatically fetch historical data
+    ENABLE_CORRELATION_ANALYSIS: true,  // Cross-metric correlation
+    ENABLE_ANOMALY_DETECTION: true,  // Detect unusual patterns
+    ENABLE_CONFIDENCE_SCORING: true,  // Provide confidence levels
+    CACHE_PREDICTIONS: true,  // Cache prediction results
+    PREDICTION_CACHE_TTL: 3600000,  // 1 hour cache for predictions
   },
 
   // Progressive data gathering strategy for smart iterative tool calls
@@ -151,11 +181,20 @@ export function shouldUseToolsForMessage(message: string): boolean {
          TOOL_CONFIG.ANALYSIS_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
 }
 
-// Determine query mode: 'simple' or 'analysis'
-export function getQueryMode(message: string): 'simple' | 'analysis' {
+// Determine query mode: 'simple' | 'analysis' | 'predictive'
+export function getQueryMode(message: string): 'simple' | 'analysis' | 'predictive' {
   const lowerMessage = message.toLowerCase().trim();
 
-  // Check for analysis keywords first
+  // Check for predictive keywords FIRST (highest priority)
+  const hasPredictiveKeywords = TOOL_CONFIG.PREDICTIVE_KEYWORDS.some(keyword =>
+    lowerMessage.includes(keyword)
+  );
+
+  if (hasPredictiveKeywords) {
+    return 'predictive';
+  }
+
+  // Check for analysis keywords
   const hasAnalysisKeywords = TOOL_CONFIG.ANALYSIS_KEYWORDS.some(keyword =>
     lowerMessage.includes(keyword)
   );
@@ -185,8 +224,26 @@ export function getQueryMode(message: string): 'simple' | 'analysis' {
   return 'simple';
 }
 
+// Generate historical date ranges for predictive analysis
+export function generateHistoricalDateRanges(currentDate: Date, months: number): Array<{month: number, year: number, label: string}> {
+  const ranges = [];
+  const date = new Date(currentDate);
+
+  for (let i = 0; i < months; i++) {
+    date.setMonth(currentDate.getMonth() - i);
+    ranges.push({
+      month: date.getMonth() + 1,
+      year: date.getFullYear(),
+      label: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    });
+    date.setMonth(currentDate.getMonth()); // Reset for next iteration
+  }
+
+  return ranges;
+}
+
 // Generate system prompt based on query mode
-export function generateSystemPrompt(date: Date = new Date(), tools: string[] = [], mode: 'simple' | 'analysis' = 'simple'): string {
+export function generateSystemPrompt(date: Date = new Date(), tools: string[] = [], mode: 'simple' | 'analysis' | 'predictive' = 'simple'): string {
   const dateStr = date.toISOString().split('T')[0];
   const year = date.getFullYear();
   const month = date.toISOString().substring(0, 7); // YYYY-MM format
@@ -200,10 +257,77 @@ CRITICAL: NEVER waste tokens on explanatory text before tool calls. Call tools I
 - Analyze the query and call ALL needed tools at once
 - This is MORE EFFICIENT than calling one tool, waiting, then calling another
 - Examples:
-  • "revenue and customers" → call get_revenue AND get_customers together
-  • "compare months" → call tools for BOTH months at once
-  • "show orders and inventory" → call BOTH tools simultaneously
+  • "revenue and customers" → identify and call relevant tools together
+  • "compare months" → call same tool with different date params at once
+  • "show orders and inventory" → identify and call multiple relevant tools simultaneously
 `;
+
+  if (mode === 'predictive') {
+    const historicalRanges = generateHistoricalDateRanges(date, TOOL_CONFIG.PREDICTIVE_MODE.PREFERRED_HISTORICAL_MONTHS);
+
+    return `${basePrompt}
+
+🔮 PREDICTIVE MODE - Extended Reasoning & Forecasting:
+You are in PREDICTIVE MODE with extended thinking enabled. The user wants predictions, forecasts, or future insights.
+
+⚡ AUTOMATIC HISTORICAL DATA GATHERING:
+BEFORE making predictions, you MUST gather historical data:
+- Fetch data for the last ${TOOL_CONFIG.PREDICTIVE_MODE.PREFERRED_HISTORICAL_MONTHS} months: ${historicalRanges.map(r => r.label).join(', ')}
+- Call tools MULTIPLE TIMES in parallel with different date parameters
+- Build a complete time-series dataset before reasoning
+
+Example for revenue prediction query:
+1. Identify relevant tools from available tools list
+2. Call tools multiple times with historical date parameters: ${historicalRanges.slice(0, 3).map(r => `month=${r.month}, year=${r.year}`).join(' AND ')} (all in one response)
+3. Wait for ALL results
+4. Use extended thinking to analyze patterns
+5. Generate prediction with confidence score
+
+🧠 EXTENDED THINKING FRAMEWORK:
+Use <thinking> tags to reason through:
+1. **Data Analysis**: Review historical patterns, trends, seasonality
+2. **Pattern Detection**: Identify growth rates, cycles, anomalies
+3. **Correlation Analysis**: Find relationships between metrics
+4. **Forecasting Logic**: Apply statistical reasoning (linear trends, moving averages, seasonal adjustments)
+5. **Confidence Assessment**: Evaluate data quality and prediction reliability
+6. **Risk Analysis**: Identify potential scenarios and uncertainties
+
+📊 PREDICTIVE ANALYSIS REQUIREMENTS:
+1. **Multi-Period Tool Calls**: Always fetch 3-6 months of historical data in parallel
+2. **Time-Series Construction**: Build month-over-month or week-over-week datasets
+3. **Trend Calculation**: Compute growth rates, averages, standard deviations
+4. **Pattern Recognition**: Detect seasonality, cycles, outliers
+5. **Cross-Metric Correlation**: Analyze relationships (e.g., customer count → revenue)
+6. **Confidence Scoring**: Rate prediction confidence as High/Medium/Low with reasoning
+7. **Scenario Planning**: Provide best-case, likely, worst-case predictions
+8. **Actionable Insights**: Recommend specific actions based on predictions
+
+🎯 PREDICTION OUTPUT FORMAT:
+- **Historical Context**: Summarize past ${TOOL_CONFIG.PREDICTIVE_MODE.PREFERRED_HISTORICAL_MONTHS} months trends
+- **Key Patterns**: Growth rate, seasonality, anomalies
+- **Prediction**: Specific forecast with timeframe
+- **Confidence Level**: High/Medium/Low with reasoning
+- **Contributing Factors**: What drives this prediction
+- **Scenarios**: Best/likely/worst case
+- **Recommendations**: Actionable next steps
+
+⚠️ STRICT REQUIREMENTS:
+- NEVER predict without historical data (minimum ${TOOL_CONFIG.PREDICTIVE_MODE.MIN_HISTORICAL_MONTHS} months)
+- Call ALL historical data tools in ONE response (parallel execution)
+- Use <thinking> for complex reasoning chains
+- Provide confidence scores with every prediction
+- Base predictions ONLY on actual data patterns
+- If insufficient data, state this clearly
+
+Example Query: "Will revenue grow next month?"
+Your Response:
+1. Identify relevant tool for revenue data from available tools
+2. Call that tool for last 6 months with different month/year params (parallel)
+3. <thinking>Analyze trends: Month 1: $10k → Month 2: $12k → Month 3: $15k... 20% average growth, seasonal spike detected...</thinking>
+4. Present prediction: "Based on historical data, revenue likely to reach $17k-$19k next month (75% confidence) due to sustained 20% growth trend and seasonal patterns."
+
+Remember: Heavy reasoning in <thinking>, data-driven predictions only, always fetch historical context first!`;
+  }
 
   if (mode === 'simple') {
     return `${basePrompt}
@@ -220,9 +344,9 @@ Guidelines:
    - Revenue/sales/money questions need order/transaction data
 
 2. TOOL CHAINING EXAMPLES:
-   - "revenue and customers" → call get_revenue + get_customers together
-   - "show orders and their customers" → call get_orders + get_customers together
-   - "compare this month vs last month" → call tools with different date params together
+   - "revenue and customers" → identify relevant tools and call together
+   - "show orders and their customers" → identify relevant tools and call together
+   - "compare this month vs last month" → call same tool with different date params together
 
 3. DIRECT RESPONSES:
    - Provide minimal context with the data (e.g., "You have 364 customers" not just "364")
@@ -324,11 +448,11 @@ export function filterToolResultForSimpleMode(toolName: string, result: any, ori
       data = result;
     }
 
-    // For customer count queries
-    if (toolName === 'get_customer_count' && originalQuery.toLowerCase().includes('how many')) {
+    // For count queries (generic - works with any tool)
+    if (toolName.includes('count') && originalQuery.toLowerCase().includes('how many')) {
       const filteredData = {
         total_count: data.total_count || data.count,
-        message: data.message || `Total customers: ${data.total_count || data.count}`
+        message: data.message || `Total: ${data.total_count || data.count}`
       };
 
       return {
@@ -339,22 +463,25 @@ export function filterToolResultForSimpleMode(toolName: string, result: any, ori
       };
     }
 
-    // For customer list queries
-    if (toolName === 'get_customers' && data.data && Array.isArray(data.data)) {
-      const filteredCustomers = data.data.map((customer: any) => ({
-        id: customer.id,
-        first_name: customer.first_name,
-        last_name: customer.last_name,
-        email_id: customer.email_id,
-        mobile: customer.mobile,
-        join_date: customer.join_date,
-        store_name: customer.store_name
-      }));
+    // For list queries with data arrays (generic - works with any tool)
+    if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+      // Keep only first 5 fields of each item to reduce payload
+      const filteredItems = data.data.map((item: any) => {
+        const filtered: any = {};
+        let fieldCount = 0;
+        for (const key in item) {
+          if (fieldCount < 5 && item.hasOwnProperty(key)) {
+            filtered[key] = item[key];
+            fieldCount++;
+          }
+        }
+        return filtered;
+      });
 
       const filteredData = {
-        customers: filteredCustomers,
-        total_showing: data.summary?.showing || filteredCustomers.length,
-        message: `Showing ${filteredCustomers.length} customers`
+        data: filteredItems,
+        total_showing: data.summary?.showing || filteredItems.length,
+        message: `Showing ${filteredItems.length} items`
       };
 
       return {
@@ -764,7 +891,7 @@ export function generateEnhancedSystemPrompt(
   date: Date = new Date(),
   availableTools: any[] = [],
   userQuery: string = '',
-  mode: 'simple' | 'analysis' = 'simple',
+  mode: 'simple' | 'analysis' | 'predictive' = 'simple',
   currentIteration: number = 0
 ): string {
   const dateStr = date.toISOString().split('T')[0];
@@ -838,6 +965,89 @@ ${suggestedTools.length > 0 ? `SUGGESTED TOOLS: ${suggestedTools.slice(0, 3).joi
 ${dateParams ? `DATE PARAMS: ${JSON.stringify(dateParams)}` : ''}
 ${toolParameterGuidance ? `\nPARAMETERS:\n${toolParameterGuidance}` : ''}${multiToolGuidance}${progressiveInfo ? '\n' + progressiveInfo : ''}`;
 
+  // PREDICTIVE MODE - Heavy reasoning with extended thinking
+  if (mode === 'predictive') {
+    const historicalRanges = generateHistoricalDateRanges(date, TOOL_CONFIG.PREDICTIVE_MODE.PREFERRED_HISTORICAL_MONTHS);
+
+    return `${basePrompt}
+
+🔮 PREDICTIVE MODE - Extended Reasoning Enabled
+
+QUERY: "${userQuery}"
+ITERATION: ${currentIteration + 1}
+
+⚡ STEP 1: AUTOMATIC HISTORICAL DATA COLLECTION
+${currentIteration === 0 ? `
+You MUST fetch historical data FIRST (all in parallel):
+${historicalRanges.map(r => `- month=${r.month}, year=${r.year} (${r.label})`).join('\n')}
+
+Call the relevant tool(s) ${historicalRanges.length} times with these date parameters IN ONE RESPONSE.
+` : `Historical data should be available from previous iteration. Proceed to analysis.`}
+
+🧠 STEP 2: EXTENDED THINKING & REASONING
+Use <thinking> tags for deep analysis:
+- Review all historical data points
+- Calculate trends, growth rates, moving averages
+- Detect patterns: seasonality, cycles, anomalies
+- Find correlations between metrics
+- Apply forecasting logic (linear regression, trend projection)
+- Assess data quality and confidence level
+- Consider multiple scenarios
+
+📊 STEP 3: PREDICTION & INSIGHTS
+Present your findings:
+1. **Historical Context**: Summarize ${TOOL_CONFIG.PREDICTIVE_MODE.PREFERRED_HISTORICAL_MONTHS}-month trends with key numbers
+2. **Patterns Identified**: Growth rates, seasonality, correlations
+3. **Prediction**: Specific forecast with timeframe and range
+4. **Confidence**: High/Medium/Low with reasoning
+5. **Scenarios**: Best-case, likely, worst-case outcomes
+6. **Recommendations**: Actionable next steps based on prediction
+
+${suggestedTools.length > 0 ? `
+🔧 SUGGESTED TOOLS FOR THIS QUERY:
+${suggestedTools.map(tool => {
+  // Generate date parameters for historical data gathering
+  const params = historicalRanges.slice(0, 3).map(r => `{month: ${r.month}, year: ${r.year}}`).join(', ');
+  return `- ${tool}: Call multiple times with date ranges: ${params}`;
+}).join('\n')}
+` : ''}
+
+⚠️ REQUIREMENTS:
+- ${currentIteration === 0 ? 'Call ALL historical data tools NOW (parallel)' : 'Use existing data to generate prediction'}
+- Use <thinking> for reasoning (you have ${TOOL_CONFIG.AI_SETTINGS.THINKING_BUDGET_TOKENS} token budget)
+- Every prediction needs a confidence score
+- Show your work: explain patterns and logic
+- Be data-driven: no speculation without historical evidence
+
+Example Thinking Process:
+<thinking>
+Historical data analysis:
+- Month 1: $10,000 revenue, 150 customers
+- Month 2: $12,000 revenue, 165 customers (+20% rev, +10% customers)
+- Month 3: $15,000 revenue, 180 customers (+25% rev, +9% customers)
+
+Trends identified:
+- Average revenue growth: 22.5% per month (accelerating)
+- Customer growth: 9.5% per month (steady)
+- Revenue per customer: Increasing from $66.67 → $72.73 → $83.33 (premium service uptake)
+
+Seasonality check: March spike suggests spring cleaning season
+Correlation: Strong positive correlation (r=0.95) between customer count and revenue
+
+Forecasting for next month:
+- Linear trend: $15k * 1.225 = $18,375
+- Customer-based: 180 * 1.095 * $85 avg = $16,758
+- Weighted average: $17,500 (±$2,000)
+
+Confidence: MEDIUM-HIGH (75%)
+- Limited to 3 months data (prefer 6+ months)
+- Strong consistent growth pattern
+- Clear seasonal factor
+</thinking>
+
+Prediction: Next month revenue: $17,500 (range $15,500-$19,500, 75% confidence)`;
+  }
+
   if (mode === 'simple') {
     return `${basePrompt}
 
@@ -845,11 +1055,12 @@ ${toolParameterGuidance ? `\nPARAMETERS:\n${toolParameterGuidance}` : ''}${multi
 
 🔧 MULTI-TOOL PLANNING:
 - Analyze what data you need
+- Identify relevant tools from available tools
 - If query needs 2+ data sources, call ALL tools at once
 - Examples:
-  • "revenue and customers" → call 2 tools together
-  • "compare Jan vs Feb" → call tool twice with different dates
-  • "orders with customer info" → call 2 tools together
+  • Multiple metrics → identify and call multiple relevant tools together
+  • Time comparisons → call same tool with different date parameters
+  • Related data → identify and call relevant tools together
 
 ⚠️ MANDATORY PARAMETER ENFORCEMENT:
 - Use EXACT parameters shown above
@@ -885,9 +1096,9 @@ Just respond naturally and helpfully!`;
 - Analyze the full query before calling tools
 - If you need 2+ data sources, call ALL tools in ONE response
 - Examples:
-  • "revenue trends and top customers" → call revenue tool + customer tool together
-  • "Jan vs Feb comparison" → call tool TWICE with different dates in same response
-  • "complete business overview" → call 3-4 tools together
+  • "revenue trends and top customers" → identify relevant tools and call together
+  • "Jan vs Feb comparison" → call same tool TWICE with different dates in same response
+  • "complete business overview" → identify 3-4 relevant tools and call together
 - This is FASTER than calling tools one by one
 
 ⚠️ MANDATORY PARAMETER ENFORCEMENT:
