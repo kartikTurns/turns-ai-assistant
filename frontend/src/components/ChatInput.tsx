@@ -54,6 +54,13 @@ export default function ChatInput({
     }
   };
 
+  // Refocus textarea when it becomes enabled
+  useEffect(() => {
+    if (!disabled && !isSubmitting) {
+      textareaRef.current?.focus();
+    }
+  }, [disabled, isSubmitting]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
