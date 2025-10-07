@@ -20,6 +20,10 @@ import {
 } from './config/toolConfig';
 import { generateFallbackContext, getBusinessRecommendations } from './utils/businessKnowledge';
 import { predictionCache } from './services/predictionCache';
+import { connectDatabase } from './config/database';
+import authRoutes from './routes/authRoutes';
+import chatRoutes from './routes/chatRoutes';
+import messageRoutes from './routes/messageRoutes';
 
 dotenv.config();
 
@@ -30,14 +34,22 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-// Initialize MCP connection
+// Initialize MongoDB and MCP connection
 (async () => {
   try {
+    // Connect to MongoDB
+    await connectDatabase();
+    console.log('✅ MongoDB initialized');
+  } catch (error) {
+    console.error('❌ MongoDB initialization failed:', error);
+  }
+
+  try {
     await mcpService.connect(MCP_SERVER_URL);
-    console.log('MCP service initialized');
+    console.log('✅ MCP service initialized');
     console.log(`Loaded configuration with ${TOOL_CONFIG.DATA_KEYWORDS.length} data keywords`);
   } catch (error) {
-    console.warn('MCP service initialization failed:', error);
+    console.warn('⚠️  MCP service initialization failed:', error);
   }
 })();
 
@@ -72,6 +84,11 @@ app.get('/api/tools', (req, res) => {
     }
   });
 });
+
+// API routes
+app.use('/api/auth', authRoutes);
+app.use('/api/chats', chatRoutes);
+app.use('/api/messages', messageRoutes);
 
 app.get('/api/config', (req, res) => {
   // Endpoint to get configuration for frontend if needed

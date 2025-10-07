@@ -11,6 +11,7 @@ import {
   type AuthParams
 } from './utils/urlParams';
 import { frontendAuthService } from './services/authService';
+import { loginUser } from './services/chatApi';
 import type { Message, ToolUse } from './types';
 
 function App() {
@@ -25,7 +26,8 @@ function App() {
     return saved ? JSON.parse(saved) : false;
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
+  const loginAttemptedRef = useRef(false); // Track if login was already attempted
+
   const {
     conversations,
     currentConversationId,
@@ -34,6 +36,7 @@ function App() {
     deleteConversation,
     updateConversation,
     selectConversation,
+    saveMessageToBackend,
   } = useConversations();
 
   const currentConversation = getCurrentConversation();
@@ -63,6 +66,23 @@ function App() {
         }
 
         console.log('Authentication validation successful');
+
+        // After validation, login/create user in MongoDB (only once)
+        if (!loginAttemptedRef.current) {
+          loginAttemptedRef.current = true;
+          try {
+            console.log('Creating/updating user in database...');
+            const loginResult = await loginUser(
+              authParams.businessId,
+              authParams.accessToken,
+              authParams.refreshToken
+            );
+            console.log('User login successful:', loginResult);
+          } catch (error) {
+            console.error('Error logging in user to database:', error);
+            // Don't block the user if DB login fails, just log it
+          }
+        }
       } catch (error) {
         console.error('Error validating authentication:', error);
         console.log('Authentication validation error, redirecting to admin portal');
@@ -124,7 +144,7 @@ function App() {
     // Create new conversation if none exists
     let conversationId = currentConversationId;
     if (!conversationId) {
-      conversationId = createNewConversation();
+      conversationId = await createNewConversation();
     }
 
     const userMessage: Message = {
@@ -137,7 +157,15 @@ function App() {
     // Add user message
     const messagesWithUser = [...messages, userMessage];
     updateConversation(conversationId, messagesWithUser);
+
+    // Save user message to backend
+    saveMessageToBackend(conversationId, 'user', content);
+
     setIsLoading(true);
+
+    // Declare outside try-catch so accessible in finally
+    let assistantMessageId = '';
+    let currentMessages = messagesWithUser;
 
     try {
       // Prepare headers with auth parameters
@@ -247,9 +275,7 @@ function App() {
         reader = originalReader;
       }
 
-      let assistantMessageId = '';
       let assistantContent = '';
-      let currentMessages = messagesWithUser;
       let currentToolUses: ToolUse[] = [];
 
       const decoder = new TextDecoder();
@@ -375,10 +401,21 @@ function App() {
         role: 'assistant',
         timestamp: new Date().toISOString(),
       };
-      const currentMessages = [...messagesWithUser, errorMessage];
+      currentMessages = [...messagesWithUser, errorMessage];
       updateConversation(conversationId, currentMessages);
     } finally {
       setIsLoading(false);
+
+      // Save assistant message to backend after streaming completes
+      const assistantMsg = currentMessages.find(m => m.id === assistantMessageId);
+      if (assistantMsg && conversationId) {
+        saveMessageToBackend(
+          conversationId,
+          'assistant',
+          assistantMsg.content,
+          assistantMsg.toolUses
+        );
+      }
     }
   };
 

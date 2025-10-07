@@ -1,61 +1,108 @@
 import { useState, useEffect } from 'react';
 import type { Conversation, Message } from '../types';
-
-const STORAGE_KEY = 'claude-conversations';
+import { chatApi } from '../services/chatApi';
 
 export function useConversations() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(() => {
+    // Load current conversation ID from localStorage on init
+    return localStorage.getItem('currentConversationId');
+  });
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Load conversations from localStorage on mount
+  // Load conversations from backend on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsedConversations = JSON.parse(stored);
-        setConversations(parsedConversations);
-        if (parsedConversations.length > 0) {
-          setCurrentConversationId(parsedConversations[0].id);
-        }
-      } catch (error) {
-        console.error('Error loading conversations:', error);
-      }
-    }
-    setIsLoaded(true);
+    loadConversations();
   }, []);
 
-  // Save conversations to localStorage whenever they change (but not on initial load)
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+  const loadConversations = async () => {
+    try {
+      setIsLoading(true);
+      const chats = await chatApi.getChats();
+      setConversations(chats);
+
+      // Validate that the stored currentConversationId still exists
+      const storedId = localStorage.getItem('currentConversationId');
+      let selectedId: string | null = null;
+
+      if (storedId && chats.some(chat => chat.id === storedId)) {
+        selectedId = storedId;
+        setCurrentConversationId(storedId);
+      } else if (chats.length > 0) {
+        // If stored ID is invalid or doesn't exist, select the first chat
+        const firstChatId = chats[0].id;
+        selectedId = firstChatId;
+        setCurrentConversationId(firstChatId);
+        localStorage.setItem('currentConversationId', firstChatId);
+      }
+
+      // Load messages for the selected conversation
+      if (selectedId) {
+        try {
+          const chatWithMessages = await chatApi.getChat(selectedId);
+          setConversations(prev => prev.map(conv =>
+            conv.id === selectedId ? chatWithMessages : conv
+          ));
+        } catch (error) {
+          console.error('Error loading conversation messages:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+      // Fallback to empty state if not authenticated
+      setConversations([]);
+    } finally {
+      setIsLoaded(true);
+      setIsLoading(false);
     }
-  }, [conversations, isLoaded]);
-
-  const createNewConversation = () => {
-    const newConversation: Conversation = {
-      id: Date.now().toString(),
-      title: 'New Chat',
-      messages: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setConversations(prev => [newConversation, ...prev]);
-    setCurrentConversationId(newConversation.id);
-    return newConversation.id;
   };
 
-  const deleteConversation = (conversationId: string) => {
-    setConversations(prev => prev.filter(conv => conv.id !== conversationId));
-    
-    if (currentConversationId === conversationId) {
-      const remaining = conversations.filter(conv => conv.id !== conversationId);
-      setCurrentConversationId(remaining.length > 0 ? remaining[0].id : null);
+  const createNewConversation = async () => {
+    try {
+      const newChat = await chatApi.createChat();
+      setConversations(prev => [newChat, ...prev]);
+      setCurrentConversationId(newChat.id);
+      localStorage.setItem('currentConversationId', newChat.id);
+      return newChat.id;
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      // Fallback to local-only conversation if API fails
+      const newConversation: Conversation = {
+        id: Date.now().toString(),
+        title: 'New Chat',
+        messages: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setConversations(prev => [newConversation, ...prev]);
+      setCurrentConversationId(newConversation.id);
+      localStorage.setItem('currentConversationId', newConversation.id);
+      return newConversation.id;
     }
   };
 
-  const updateConversation = (conversationId: string, messages: Message[]) => {
+  const deleteConversation = async (conversationId: string) => {
+    try {
+      await chatApi.deleteChat(conversationId);
+      setConversations(prev => prev.filter(conv => conv.id !== conversationId));
+
+      if (currentConversationId === conversationId) {
+        const remaining = conversations.filter(conv => conv.id !== conversationId);
+        const newId = remaining.length > 0 ? remaining[0].id : null;
+        setCurrentConversationId(newId);
+        if (newId) {
+          localStorage.setItem('currentConversationId', newId);
+        } else {
+          localStorage.removeItem('currentConversationId');
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+    }
+  };
+
+  const updateConversation = async (conversationId: string, messages: Message[]) => {
     setConversations(prev => prev.map(conv => {
       if (conv.id === conversationId) {
         // Update title with first user message if it's still "New Chat"
@@ -64,6 +111,11 @@ export function useConversations() {
           const firstUserMessage = messages.find(msg => msg.role === 'user');
           if (firstUserMessage) {
             title = firstUserMessage.content.slice(0, 50) + (firstUserMessage.content.length > 50 ? '...' : '');
+
+            // Update title in backend
+            chatApi.updateChatTitle(conversationId, title).catch(err => {
+              console.error('Error updating chat title:', err);
+            });
           }
         }
 
@@ -78,13 +130,40 @@ export function useConversations() {
     }));
   };
 
+  const saveMessageToBackend = async (
+    chatId: string,
+    role: 'user' | 'assistant',
+    content: string,
+    toolUses?: any[]
+  ) => {
+    try {
+      await chatApi.saveMessage(chatId, role, content, toolUses);
+    } catch (error) {
+      console.error('Error saving message to backend:', error);
+    }
+  };
+
   const getCurrentConversation = () => {
     if (!currentConversationId) return null;
     return conversations.find(conv => conv.id === currentConversationId) || null;
   };
 
-  const selectConversation = (conversationId: string) => {
+  const selectConversation = async (conversationId: string) => {
     setCurrentConversationId(conversationId);
+    localStorage.setItem('currentConversationId', conversationId);
+
+    // Load messages for this conversation if not already loaded
+    const conversation = conversations.find(conv => conv.id === conversationId);
+    if (conversation && (!conversation.messages || conversation.messages.length === 0)) {
+      try {
+        const chatWithMessages = await chatApi.getChat(conversationId);
+        setConversations(prev => prev.map(conv =>
+          conv.id === conversationId ? chatWithMessages : conv
+        ));
+      } catch (error) {
+        console.error('Error loading conversation messages:', error);
+      }
+    }
   };
 
   return {
@@ -95,5 +174,8 @@ export function useConversations() {
     deleteConversation,
     updateConversation,
     selectConversation,
+    saveMessageToBackend,
+    isLoading,
+    loadConversations, // Expose for manual refresh
   };
 }
