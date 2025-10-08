@@ -5,14 +5,10 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/turnsI
 
 export async function connectDatabase(): Promise<void> {
   try {
-    const options = {
+    const options: any = {
       serverSelectionTimeoutMS: 30000, // Increase timeout to 30 seconds
       socketTimeoutMS: 45000,
-      family: 4, // Force IPv4
-      // Additional options for Atlas SSL/TLS
-      ssl: MONGODB_URI.includes('mongodb+srv'),
-      retryWrites: true,
-      w: 'majority'
+      family: 4 // Force IPv4
     };
 
     await mongoose.connect(MONGODB_URI, options);
