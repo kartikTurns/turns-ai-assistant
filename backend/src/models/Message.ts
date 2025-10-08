@@ -7,7 +7,7 @@ export interface IToolUse {
   input: any;
   result?: any;
   error?: string;
-  status?: 'executing' | 'completed' | 'error';
+  status?: 'executing' | 'completed' | 'completed_with_warning' | 'error';
   executionTime?: number;
   wasCached?: boolean;
 }
@@ -47,7 +47,7 @@ const ToolUseSchema = new Schema<IToolUse>({
   },
   status: {
     type: String,
-    enum: ['executing', 'completed', 'error'],
+    enum: ['executing', 'completed', 'completed_with_warning', 'error'],
     default: 'executing'
   },
   executionTime: {
