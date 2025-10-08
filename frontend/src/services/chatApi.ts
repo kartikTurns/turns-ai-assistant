@@ -1,7 +1,7 @@
 // Chat API service - replaces localStorage with backend API calls
 import type { Conversation, Message } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 /**
  * Login or create user in MongoDB after authentication
