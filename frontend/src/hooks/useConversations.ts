@@ -59,6 +59,13 @@ export function useConversations() {
   };
 
   const createNewConversation = async () => {
+    // Check if current conversation is empty, if so just clear it instead of creating new one
+    const currentConv = conversations.find(conv => conv.id === currentConversationId);
+    if (currentConv && currentConv.messages.length === 0) {
+      // Current conversation is already empty, just return its ID
+      return currentConversationId as string;
+    }
+
     try {
       const newChat = await chatApi.createChat();
       setConversations(prev => [newChat, ...prev]);
