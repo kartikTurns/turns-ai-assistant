@@ -25,6 +25,8 @@ import { connectDatabase } from './config/database';
 import authRoutes from './routes/authRoutes';
 import chatRoutes from './routes/chatRoutes';
 import messageRoutes from './routes/messageRoutes';
+import tokenRoutes from './routes/tokenRoutes';
+import { tokenService } from './services/tokenService';
 
 
 const app = express();
@@ -89,6 +91,7 @@ app.get('/api/tools', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/tokens', tokenRoutes);
 
 app.get('/api/config', (req, res) => {
   // Endpoint to get configuration for frontend if needed
@@ -98,6 +101,37 @@ app.get('/api/config', (req, res) => {
     dataKeywordsCount: TOOL_CONFIG.DATA_KEYWORDS.length,
     excludeKeywordsCount: TOOL_CONFIG.EXCLUDE_KEYWORDS.length,
   });
+});
+
+// Quick token balance check (no auth middleware for easy access)
+app.get('/api/user/balance/:businessId', async (req, res) => {
+  try {
+    const { businessId } = req.params;
+
+    const balance = await tokenService.getTokenBalance(businessId);
+
+    if (balance === null) {
+      res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      businessId,
+      balance,
+      balanceFormatted: balance.toLocaleString()
+    });
+  } catch (error) {
+    console.error('Error fetching token balance:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch token balance',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 // Simple test endpoint for debugging
@@ -202,6 +236,16 @@ app.post('/api/chat', async (req, res) => {
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({
       error: 'ANTHROPIC_API_KEY not configured'
+    });
+  }
+
+  // Check token balance before processing
+  const tokenBalance = await tokenService.getTokenBalance(business_id);
+  if (tokenBalance !== null && tokenBalance <= 0) {
+    return res.status(402).json({
+      error: 'Insufficient tokens',
+      message: 'Your token balance is 0. Please contact support to top up.',
+      tokenBalance: 0
     });
   }
 
@@ -360,6 +404,7 @@ async function handleConversationWithTools(
   // Track tool calls to prevent excessive iterations and monitor data sufficiency
   let toolCallHistory: { toolName: string, params: any, recordCount?: number }[] = [];
   let totalRecordsGathered = 0;
+  let totalTokensUsed = 0; // Track total tokens for deduction
 
   while (!conversationComplete && currentIteration < maxIterations) {
     // Generate system prompt with current iteration for progressive parameter guidance
@@ -458,8 +503,14 @@ async function handleConversationWithTools(
 
     // Log token usage to monitor rate limits
     const usage = (response as any).usage;
-    if (usage && TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
-      console.log(`🎯 Tokens - Input: ${usage.input_tokens || 0}, Output: ${usage.output_tokens || 0}, Total: ${(usage.input_tokens || 0) + (usage.output_tokens || 0)}`);
+    if (usage) {
+      const iterationTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
+      totalTokensUsed += iterationTokens;
+
+      if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
+        console.log(`🎯 Tokens - Input: ${usage.input_tokens || 0}, Output: ${usage.output_tokens || 0}, Total: ${iterationTokens}`);
+        console.log(`💰 Session total tokens: ${totalTokensUsed}`);
+      }
     }
 
     if (TOOL_CONFIG.LOGGING.LOG_PERFORMANCE) {
@@ -962,6 +1013,27 @@ async function handleConversationWithTools(
 
   if (currentIteration >= maxIterations) {
     console.warn(`Max iterations (${maxIterations}) reached, ending conversation`);
+  }
+
+  // Deduct tokens from user balance
+  if (totalTokensUsed > 0 && businessId) {
+    const deductResult = await tokenService.deductTokens(businessId, totalTokensUsed);
+
+    if (deductResult.success) {
+      console.log(`💳 Deducted ${totalTokensUsed} tokens. New balance: ${deductResult.newBalance?.toLocaleString()}`);
+    } else {
+      console.warn(`⚠️ Token deduction failed: ${deductResult.message}`);
+    }
+
+    // Send token balance update to frontend
+    const tokenBalanceData = {
+      type: 'token_update',
+      tokensUsed: totalTokensUsed,
+      newBalance: deductResult.newBalance || 0,
+      id: messageId,
+      timestamp: timestamp,
+    };
+    res.write(`data: ${JSON.stringify(tokenBalanceData)}\n\n`);
   }
 
   const endData = {

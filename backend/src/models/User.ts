@@ -7,6 +7,7 @@ export interface IUser extends Document {
   refreshToken?: string;
   lastLoginAt: Date;
   createdAt: Date;
+  tokenBalance: number;
   metadata: {
     loginCount: number;
     lastIp?: string;
@@ -30,6 +31,11 @@ const UserSchema = new Schema<IUser>({
   lastLoginAt: {
     type: Date,
     default: Date.now
+  },
+  tokenBalance: {
+    type: Number,
+    default: 1000000, // 1 million tokens for new users
+    min: 0
   },
   metadata: {
     loginCount: {

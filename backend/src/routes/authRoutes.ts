@@ -40,7 +40,8 @@ router.post('/login', async (req: Request, res: Response) => {
         businessId: user.businessId,
         lastLoginAt: user.lastLoginAt,
         loginCount: user.metadata.loginCount,
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        tokenBalance: user.tokenBalance
       }
     });
   } catch (error) {

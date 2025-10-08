@@ -36,12 +36,14 @@ export class UserService {
           accessToken,
           refreshToken,
           lastLoginAt: new Date(),
+          tokenBalance: 1000000, // 1 million tokens for new users
           metadata: {
             loginCount: 1,
             lastIp: ip
           }
         });
         await user.save();
+        console.log(`✨ New user created: ${businessId} with 1,000,000 tokens`);
       } catch (error: any) {
         // If duplicate key error (race condition), fetch the user
         if (error.code === 11000) {
