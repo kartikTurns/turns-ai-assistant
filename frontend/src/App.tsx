@@ -435,24 +435,299 @@ function App() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Messages - No header needed since sidebar is always visible */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#FAFAFA' }}>
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center px-4">
-                <h1 className="text-2xl font-medium text-gray-900 mb-2">Welcome to TurnsIQ</h1>
-                <p className="text-sm text-gray-600 mb-3">How can I help you today?</p>
-                {authParams.accessToken && authParams.businessId && (
-                  <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
-                    Authenticated as {authParams.businessId}
+              <div className="text-center px-4" style={{ maxWidth: '900px', width: '100%' }}>
+                {/* Logo and Welcome */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  marginBottom: '24px'
+                }}>
+                  <div style={{
+                    width: '80px',
+                    height: '80px',
+                    backgroundColor: '#FD390E',
+                    borderRadius: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                  }}>
+                    <svg
+                      style={{ width: '48px', height: '48px', color: '#FFFFFF' }}
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1a7 7 0 0 1-7 7H9a7 7 0 0 1-7-7H1a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2zM9 9a5 5 0 0 0-5 5v3H3v1h1a5 5 0 0 0 5 5h6a5 5 0 0 0 5-5h1v-1h-1v-3a5 5 0 0 0-5-5H9zm2.5 2.5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zM8 13.5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm4 4a2 2 0 0 1-2-2h4a2 2 0 0 1-2 2z"/>
+                    </svg>
                   </div>
-                )}
-                {(!authParams.accessToken || !authParams.businessId) && (
-                  <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full mr-2"></div>
-                    No authentication
+                </div>
+
+                <h1 style={{
+                  fontSize: '36px',
+                  fontWeight: '700',
+                  color: '#111827',
+                  marginBottom: '12px',
+                  letterSpacing: '-0.02em'
+                }}>
+                  Welcome to TurnsIQ
+                </h1>
+                <p style={{
+                  fontSize: '16px',
+                  color: '#6B7280',
+                  marginBottom: '48px',
+                  lineHeight: '1.6'
+                }}>
+                  Unlock the power of AI. Start a conversation and let's create something extraordinary together.
+                </p>
+
+                {/* Feature Cards Grid */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: '20px',
+                  marginBottom: '32px'
+                }}>
+                  {/* Order Tracker */}
+                  <div style={{
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '12px',
+                    padding: '24px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      backgroundColor: '#EEF2FF',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: '16px',
+                      fontSize: '24px'
+                    }}>
+                      📦
+                    </div>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+                      Order Tracker
+                    </h3>
+                    <p style={{ fontSize: '14px', color: '#6B7280', margin: 0, lineHeight: '1.5' }}>
+                      Get instant updates on active, completed, or delayed orders in one place.
+                    </p>
                   </div>
-                )}
+
+                  {/* Customer Insights */}
+                  <div style={{
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '12px',
+                    padding: '24px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      backgroundColor: '#ECFDF5',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: '16px',
+                      fontSize: '24px'
+                    }}>
+                      👥
+                    </div>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+                      Customer Insights
+                    </h3>
+                    <p style={{ fontSize: '14px', color: '#6B7280', margin: 0, lineHeight: '1.5' }}>
+                      See who your top spenders are, first-time visitors, and customers at risk of leaving.
+                    </p>
+                  </div>
+
+                  {/* Revenue Snapshot */}
+                  <div style={{
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '12px',
+                    padding: '24px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      backgroundColor: '#FFF7ED',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: '16px',
+                      fontSize: '24px'
+                    }}>
+                      💲
+                    </div>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+                      Revenue Snapshot
+                    </h3>
+                    <p style={{ fontSize: '14px', color: '#6B7280', margin: 0, lineHeight: '1.5' }}>
+                      Daily, weekly, and monthly sales breakdown — know where profits are coming from.
+                    </p>
+                  </div>
+
+                  {/* Trend Alerts */}
+                  <div style={{
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '12px',
+                    padding: '24px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      backgroundColor: '#F3E8FF',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: '16px',
+                      fontSize: '24px'
+                    }}>
+                      📈
+                    </div>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+                      Trend Alerts
+                    </h3>
+                    <p style={{ fontSize: '14px', color: '#6B7280', margin: 0, lineHeight: '1.5' }}>
+                      AI highlights shifts in order volume, repeat rates, or service demand before you notice.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Additional Feature Card - Full Width */}
+                <div style={{
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                  marginBottom: '32px',
+                  maxWidth: '600px',
+                  marginLeft: 'auto',
+                  marginRight: 'auto'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      backgroundColor: '#FEF3C7',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      fontSize: '24px'
+                    }}>
+                      🧾
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px', margin: 0 }}>
+                        Billing & Disputes
+                      </h3>
+                      <p style={{ fontSize: '14px', color: '#6B7280', margin: '4px 0 0 0', lineHeight: '1.5' }}>
+                        Track pending payments, disputed charges, and auto-generated invoices.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Features Footer */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '24px',
+                  fontSize: '13px',
+                  color: '#6B7280',
+                  paddingTop: '8px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <svg style={{ width: '16px', height: '16px', color: '#10B981' }} fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Secure & Private
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <svg style={{ width: '16px', height: '16px', color: '#F59E0B' }} fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                    </svg>
+                    Lightning Fast
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <svg style={{ width: '16px', height: '16px', color: '#3B82F6' }} fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M7 2a1 1 0 011 1v1h3a1 1 0 110 2H9.578a18.87 18.87 0 01-1.724 4.78c.29.354.596.696.914 1.026a1 1 0 11-1.44 1.389c-.188-.196-.373-.396-.554-.6a19.098 19.098 0 01-3.107 3.567 1 1 0 01-1.334-1.49 17.087 17.087 0 003.13-3.733 18.992 18.992 0 01-1.487-2.494 1 1 0 111.79-.89c.234.47.489.928.764 1.372.417-.934.752-1.913.997-2.927H3a1 1 0 110-2h3V3a1 1 0 011-1zm6 6a1 1 0 01.894.553l2.991 5.982a.869.869 0 01.02.037l.99 1.98a1 1 0 11-1.79.895L15.383 16h-4.764l-.724 1.447a1 1 0 11-1.788-.894l.99-1.98.019-.038 2.99-5.982A1 1 0 0113 8zm-1.382 6h2.764L13 11.236 11.618 14z" clipRule="evenodd" />
+                    </svg>
+                    Multi-language
+                  </div>
+                </div>
               </div>
             </div>
           ) : (

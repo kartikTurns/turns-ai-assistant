@@ -124,6 +124,7 @@ export class ChatService {
       id: chat.id,
       title: chat.title,
       messages: [], // Messages loaded separately
+      messageCount: chat.messageCount,
       createdAt: chat.createdAt.toISOString(),
       updatedAt: chat.updatedAt.toISOString()
     }));

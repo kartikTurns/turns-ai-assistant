@@ -76,131 +76,141 @@ export default function ChatInput({
     <div style={{
       borderTop: '1px solid #E5E7EB',
       backgroundColor: 'white',
-      padding: '20px 24px',
-      boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.1)',
-      backdropFilter: 'blur(8px)'
+      padding: '16px 24px 20px',
+      boxShadow: '0 -1px 3px rgba(0, 0, 0, 0.05)'
     }}>
       <form onSubmit={handleSubmit}>
         <div style={{
           position: 'relative',
-          maxWidth: '800px',
+          maxWidth: '900px',
           margin: '0 auto'
         }}>
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            disabled={disabled || isSubmitting}
-            rows={1}
-            style={{
-              width: '100%',
-              padding: '18px 70px 18px 20px',
-              border: '2px solid #FECACA',
-              borderRadius: '16px',
-              fontSize: '15px',
-              lineHeight: '1.6',
-              resize: 'none',
-              outline: 'none',
-              minHeight: '56px',
-              maxHeight: '200px',
-              overflowY: 'hidden',
-              fontFamily: 'inherit',
-              backgroundColor: disabled || isSubmitting ? '#F8FAFC' : '#FAFBFC',
-              color: disabled || isSubmitting ? '#6B7280' : '#1F2937',
-              boxSizing: 'border-box',
-              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)'
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = '#FD390E';
-              e.target.style.backgroundColor = '#FFFFFF';
-              e.target.style.boxShadow = '0 0 0 4px rgba(253, 57, 14, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1)';
-              e.target.style.transform = 'translateY(-1px)';
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = '#FECACA';
-              e.target.style.backgroundColor = disabled || isSubmitting ? '#F8FAFC' : '#FAFBFC';
-              e.target.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)';
-              e.target.style.transform = 'translateY(0)';
-            }}
-          />
+          {/* Input Container */}
+          <div style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: '8px'
+          }}>
+            {/* Textarea Container */}
+            <div style={{ position: 'relative', flex: 1 }}>
+              <textarea
+                ref={textareaRef}
+                value={message}
+                onChange={handleChange}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask me anything... I'm here to help!"
+                disabled={disabled || isSubmitting}
+                rows={1}
+                style={{
+                  width: '100%',
+                  padding: '12px 56px 12px 16px',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '12px',
+                  fontSize: '14px',
+                  lineHeight: '1.5',
+                  resize: 'none',
+                  outline: 'none',
+                  minHeight: '44px',
+                  maxHeight: '200px',
+                  overflowY: 'hidden',
+                  fontFamily: 'inherit',
+                  backgroundColor: disabled || isSubmitting ? '#F9FAFB' : '#FFFFFF',
+                  color: disabled || isSubmitting ? '#9CA3AF' : '#111827',
+                  boxSizing: 'border-box',
+                  transition: 'all 0.2s ease'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#FD390E';
+                  e.target.style.boxShadow = '0 0 0 3px rgba(253, 57, 14, 0.1)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#E5E7EB';
+                  e.target.style.boxShadow = 'none';
+                }}
+              />
 
-          <button
-            type="submit"
-            disabled={!message.trim() || isSubmitting || disabled}
-            style={{
-              position: 'absolute',
-              right: '14px',
-              bottom: '12px',
-              padding: '10px',
-              backgroundColor: (!message.trim() || isSubmitting || disabled)
-                ? '#FFF1EE'
-                : 'linear-gradient(135deg, #FD390E 0%, #E62E08 100%)',
-              background: (!message.trim() || isSubmitting || disabled)
-                ? '#FFF1EE'
-                : 'linear-gradient(135deg, #FD390E 0%, #E62E08 100%)',
-              color: (!message.trim() || isSubmitting || disabled) ? '#FD390E' : 'white',
-              border: 'none',
-              borderRadius: '12px',
-              fontSize: '12px',
-              fontWeight: '500',
-              cursor: (!message.trim() || isSubmitting || disabled) ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              width: '36px',
-              height: '36px',
-              justifyContent: 'center',
-              zIndex: 1,
-              boxShadow: (!message.trim() || isSubmitting || disabled)
-                ? 'none'
-                : '0 4px 12px rgba(253, 57, 14, 0.3), 0 2px 4px rgba(253, 57, 14, 0.2)',
-              transform: 'scale(1)'
-            }}
-            onMouseEnter={(e) => {
-              if (!(!message.trim() || isSubmitting || disabled)) {
-                e.currentTarget.style.backgroundColor = '#E62E08';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!(!message.trim() || isSubmitting || disabled)) {
-                e.currentTarget.style.backgroundColor = '#FD390E';
-              }
-            }}
-          >
-            {isSubmitting ? (
-              <>
-                <div style={{
-                  width: '16px',
-                  height: '16px',
-                  border: '2px solid transparent',
-                  borderTop: '2px solid currentColor',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }} />
-                <style>
-                  {`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}
-                </style>
-              </>
-            ) : (
-              <svg
-                width="16"
-                height="16"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+              {/* Send Button */}
+              <button
+                type="submit"
+                disabled={!message.trim() || isSubmitting || disabled}
+                style={{
+                  position: 'absolute',
+                  right: '6px',
+                  bottom: '6px',
+                  padding: '8px',
+                  backgroundColor: (!message.trim() || isSubmitting || disabled)
+                    ? '#F9FAFB'
+                    : '#FD390E',
+                  color: (!message.trim() || isSubmitting || disabled) ? '#9CA3AF' : 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: (!message.trim() || isSubmitting || disabled) ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease',
+                  width: '32px',
+                  height: '32px',
+                  zIndex: 1
+                }}
+                onMouseEnter={(e) => {
+                  if (!(!message.trim() || isSubmitting || disabled)) {
+                    e.currentTarget.style.backgroundColor = '#E6330D';
+                    e.currentTarget.style.transform = 'scale(1.05)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!(!message.trim() || isSubmitting || disabled)) {
+                    e.currentTarget.style.backgroundColor = '#FD390E';
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }
+                }}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                />
-              </svg>
-            )}
-          </button>
+                {isSubmitting ? (
+                  <>
+                    <div style={{
+                      width: '14px',
+                      height: '14px',
+                      border: '2px solid transparent',
+                      borderTop: '2px solid currentColor',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    <style>
+                      {`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}
+                    </style>
+                  </>
+                ) : (
+                  <svg
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2.5}
+                      d="M5 10l7-7m0 0l7 7m-7-7v18"
+                    />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Disclaimer */}
+          <p style={{
+            fontSize: '11px',
+            color: '#9CA3AF',
+            textAlign: 'center',
+            margin: '10px 0 0 0',
+            lineHeight: '1.4'
+          }}>
+            TurnsIQ can make mistakes. Consider checking important information.
+          </p>
         </div>
       </form>
     </div>
