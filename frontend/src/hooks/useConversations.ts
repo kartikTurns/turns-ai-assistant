@@ -8,7 +8,6 @@ export function useConversations() {
     // Load current conversation ID from localStorage on init
     return localStorage.getItem('currentConversationId');
   });
-  const [isLoaded, setIsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   // Load conversations from backend on mount
@@ -53,7 +52,6 @@ export function useConversations() {
       // Fallback to empty state if not authenticated
       setConversations([]);
     } finally {
-      setIsLoaded(true);
       setIsLoading(false);
     }
   };
