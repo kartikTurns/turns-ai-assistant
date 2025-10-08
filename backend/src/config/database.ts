@@ -5,7 +5,17 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/turnsI
 
 export async function connectDatabase(): Promise<void> {
   try {
-    await mongoose.connect(MONGODB_URI);
+    const options = {
+      serverSelectionTimeoutMS: 30000, // Increase timeout to 30 seconds
+      socketTimeoutMS: 45000,
+      family: 4, // Force IPv4
+      // Additional options for Atlas SSL/TLS
+      ssl: MONGODB_URI.includes('mongodb+srv'),
+      retryWrites: true,
+      w: 'majority'
+    };
+
+    await mongoose.connect(MONGODB_URI, options);
     console.log('✅ MongoDB connected successfully');
     console.log(`📦 Database: ${mongoose.connection.name}`);
     console.log(`🔗 Connection type: ${MONGODB_URI.includes('mongodb+srv') ? 'MongoDB Atlas (Cloud)' : 'Local MongoDB'}`);
