@@ -8,6 +8,7 @@ export async function connectDatabase(): Promise<void> {
     await mongoose.connect(MONGODB_URI);
     console.log('✅ MongoDB connected successfully');
     console.log(`📦 Database: ${mongoose.connection.name}`);
+    console.log(`🔗 Connection type: ${MONGODB_URI.includes('mongodb+srv') ? 'MongoDB Atlas (Cloud)' : 'Local MongoDB'}`);
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
     throw error;

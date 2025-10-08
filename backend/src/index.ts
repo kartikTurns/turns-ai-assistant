@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+dotenv.config();
 import Anthropic from '@anthropic-ai/sdk';
 import { mcpService } from './mcpService';
 import { authService } from './authService';
@@ -25,7 +26,6 @@ import authRoutes from './routes/authRoutes';
 import chatRoutes from './routes/chatRoutes';
 import messageRoutes from './routes/messageRoutes';
 
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;

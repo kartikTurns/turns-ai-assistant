@@ -18,8 +18,8 @@ export interface IChat extends Document {
 const ChatSchema = new Schema<IChat>({
   businessId: {
     type: String,
-    required: true,
-    index: true
+    required: true
+    // Removed "index: true" - compound indexes below cover this
   },
   title: {
     type: String,
@@ -52,7 +52,7 @@ const ChatSchema = new Schema<IChat>({
   timestamps: true // Automatically manages createdAt and updatedAt
 });
 
-// Indexes for efficient queries
+// Compound indexes for efficient queries (these already include businessId)
 ChatSchema.index({ businessId: 1, updatedAt: -1 }); // For listing user's chats sorted by recent
 ChatSchema.index({ businessId: 1, lastMessageAt: -1 }); // For activity-based sorting
 

@@ -17,8 +17,8 @@ const UserSchema = new Schema<IUser>({
   businessId: {
     type: String,
     required: true,
-    unique: true,
-    index: true
+    unique: true
+    // Removed "index: true" to avoid duplicate - unique already creates index
   },
   accessToken: {
     type: String,
@@ -44,7 +44,6 @@ const UserSchema = new Schema<IUser>({
   timestamps: true // Automatically manages createdAt and updatedAt
 });
 
-// Index for efficient lookups
-UserSchema.index({ businessId: 1 });
+// Note: No need for UserSchema.index({ businessId: 1 }) because "unique: true" already creates it
 
 export const User = mongoose.model<IUser>('User', UserSchema);

@@ -63,13 +63,13 @@ const MessageSchema = new Schema<IMessage>({
   chatId: {
     type: Schema.Types.ObjectId,
     ref: 'Chat',
-    required: true,
-    index: true
+    required: true
+    // Removed "index: true" - compound index below covers this
   },
   businessId: {
     type: String,
-    required: true,
-    index: true
+    required: true
+    // Removed "index: true" - compound index below covers this
   },
   role: {
     type: String,
@@ -82,8 +82,8 @@ const MessageSchema = new Schema<IMessage>({
   },
   timestamp: {
     type: Date,
-    default: Date.now,
-    index: true
+    default: Date.now
+    // Removed "index: true" - compound indexes below cover this
   },
   toolUses: {
     type: [ToolUseSchema],
@@ -105,7 +105,7 @@ const MessageSchema = new Schema<IMessage>({
   timestamps: false // Using custom timestamp field
 });
 
-// Compound indexes for efficient queries
+// Compound indexes for efficient queries (these already include chatId, businessId, timestamp)
 MessageSchema.index({ chatId: 1, timestamp: 1 }); // For retrieving messages in order
 MessageSchema.index({ businessId: 1, timestamp: -1 }); // For user's message history
 
