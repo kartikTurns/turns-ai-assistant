@@ -28,16 +28,8 @@ export function useConversations() {
       if (storedId && chats.some(chat => chat.id === storedId)) {
         selectedId = storedId;
         setCurrentConversationId(storedId);
-      } else if (chats.length > 0) {
-        // If stored ID is invalid or doesn't exist, select the first chat
-        const firstChatId = chats[0].id;
-        selectedId = firstChatId;
-        setCurrentConversationId(firstChatId);
-        localStorage.setItem('currentConversationId', firstChatId);
-      }
 
-      // Load messages for the selected conversation
-      if (selectedId) {
+        // Load messages for the selected conversation
         try {
           const chatWithMessages = await chatApi.getChat(selectedId);
           setConversations(prev => prev.map(conv =>
@@ -46,6 +38,11 @@ export function useConversations() {
         } catch (error) {
           console.error('Error loading conversation messages:', error);
         }
+      } else {
+        // If no valid stored conversation, don't create one yet
+        // Let the user send a message first, then create it
+        setCurrentConversationId(null);
+        localStorage.removeItem('currentConversationId');
       }
     } catch (error) {
       console.error('Error loading conversations:', error);
