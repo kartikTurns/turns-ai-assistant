@@ -3,13 +3,11 @@ import React, { useState, useRef, useEffect } from 'react';
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
   disabled?: boolean;
-  placeholder?: string;
 }
 
 export default function ChatInput({
   onSendMessage,
-  disabled = false,
-  placeholder = "Type your message..."
+  disabled = false
 }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

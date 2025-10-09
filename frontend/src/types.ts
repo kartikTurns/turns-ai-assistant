@@ -20,6 +20,7 @@ export interface Conversation {
   messages: Message[];
   createdAt: string;
   updatedAt: string;
+  messageCount?: number;
 }
 
 export interface ToolUse {
