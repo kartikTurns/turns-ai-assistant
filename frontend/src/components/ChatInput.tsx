@@ -76,7 +76,7 @@ export default function ChatInput({
     <div style={{
       borderTop: '1px solid #E5E7EB',
       backgroundColor: 'white',
-      padding: '16px 24px 20px',
+      padding: '12px 24px 15px',
       boxShadow: '0 -1px 3px rgba(0, 0, 0, 0.05)'
     }}>
       <form onSubmit={handleSubmit}>
@@ -206,7 +206,7 @@ export default function ChatInput({
             fontSize: '11px',
             color: '#9CA3AF',
             textAlign: 'center',
-            margin: '10px 0 0 0',
+            margin: '8px 0 0 0',
             lineHeight: '1.4'
           }}>
             TurnsIQ can make mistakes. Consider checking important information.

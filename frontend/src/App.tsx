@@ -443,20 +443,20 @@ function App() {
                 <div style={{
                   display: 'flex',
                   justifyContent: 'center',
-                  marginBottom: '24px'
+                  marginBottom: '8px'
                 }}>
                   <div style={{
-                    width: '80px',
-                    height: '80px',
+                    width: '64px',
+                    height: '64px',
                     backgroundColor: '#FD390E',
-                    borderRadius: '20px',
+                    borderRadius: '16px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
                   }}>
                     <svg
-                      style={{ width: '48px', height: '48px', color: '#FFFFFF' }}
+                      style={{ width: '38px', height: '38px', color: '#FFFFFF' }}
                       fill="currentColor"
                       viewBox="0 0 24 24"
                     >
@@ -466,10 +466,11 @@ function App() {
                 </div>
 
                 <h1 style={{
-                  fontSize: '36px',
+                  fontSize: '32px',
                   fontWeight: '700',
                   color: '#111827',
-                  marginBottom: '12px',
+                  marginBottom: '2px',
+                  marginTop: '8px',
                   letterSpacing: '-0.02em'
                 }}>
                   Welcome to TurnsIQ
@@ -477,7 +478,8 @@ function App() {
                 <p style={{
                   fontSize: '16px',
                   color: '#6B7280',
-                  marginBottom: '48px',
+                  marginBottom: '20px',
+                  marginTop: '8px',
                   lineHeight: '1.6'
                 }}>
                   Unlock the power of AI. Start a conversation and let's create something extraordinary together.
@@ -487,15 +489,18 @@ function App() {
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(2, 1fr)',
-                  gap: '20px',
-                  marginBottom: '32px'
+                  gap: '12px',
+                  marginBottom: '20px',
+                  maxWidth: '600px',
+                  marginLeft: 'auto',
+                  marginRight: 'auto'
                 }}>
                   {/* Order Tracker */}
                   <div style={{
                     backgroundColor: '#FFFFFF',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '12px',
-                    padding: '24px',
+                    borderRadius: '8px',
+                    padding: '14px',
                     textAlign: 'left',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
@@ -510,22 +515,22 @@ function App() {
                     e.currentTarget.style.transform = 'translateY(0)';
                   }}>
                     <div style={{
-                      width: '48px',
-                      height: '48px',
+                      width: '36px',
+                      height: '36px',
                       backgroundColor: '#EEF2FF',
-                      borderRadius: '12px',
+                      borderRadius: '8px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginBottom: '16px',
-                      fontSize: '24px'
+                      marginBottom: '10px',
+                      fontSize: '18px'
                     }}>
                       📦
                     </div>
-                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '4px' }}>
                       Order Tracker
                     </h3>
-                    <p style={{ fontSize: '14px', color: '#6B7280', margin: 0, lineHeight: '1.5' }}>
+                    <p style={{ fontSize: '12px', color: '#6B7280', margin: 0, lineHeight: '1.3' }}>
                       Get instant updates on active, completed, or delayed orders in one place.
                     </p>
                   </div>
@@ -534,8 +539,8 @@ function App() {
                   <div style={{
                     backgroundColor: '#FFFFFF',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '12px',
-                    padding: '24px',
+                    borderRadius: '8px',
+                    padding: '14px',
                     textAlign: 'left',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
@@ -550,22 +555,22 @@ function App() {
                     e.currentTarget.style.transform = 'translateY(0)';
                   }}>
                     <div style={{
-                      width: '48px',
-                      height: '48px',
+                      width: '36px',
+                      height: '36px',
                       backgroundColor: '#ECFDF5',
-                      borderRadius: '12px',
+                      borderRadius: '8px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginBottom: '16px',
-                      fontSize: '24px'
+                      marginBottom: '10px',
+                      fontSize: '18px'
                     }}>
                       👥
                     </div>
-                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '4px' }}>
                       Customer Insights
                     </h3>
-                    <p style={{ fontSize: '14px', color: '#6B7280', margin: 0, lineHeight: '1.5' }}>
+                    <p style={{ fontSize: '12px', color: '#6B7280', margin: 0, lineHeight: '1.3' }}>
                       See who your top spenders are, first-time visitors, and customers at risk of leaving.
                     </p>
                   </div>
@@ -574,8 +579,8 @@ function App() {
                   <div style={{
                     backgroundColor: '#FFFFFF',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '12px',
-                    padding: '24px',
+                    borderRadius: '8px',
+                    padding: '14px',
                     textAlign: 'left',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
@@ -590,22 +595,22 @@ function App() {
                     e.currentTarget.style.transform = 'translateY(0)';
                   }}>
                     <div style={{
-                      width: '48px',
-                      height: '48px',
+                      width: '36px',
+                      height: '36px',
                       backgroundColor: '#FFF7ED',
-                      borderRadius: '12px',
+                      borderRadius: '8px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginBottom: '16px',
-                      fontSize: '24px'
+                      marginBottom: '10px',
+                      fontSize: '18px'
                     }}>
                       💲
                     </div>
-                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '4px' }}>
                       Revenue Snapshot
                     </h3>
-                    <p style={{ fontSize: '14px', color: '#6B7280', margin: 0, lineHeight: '1.5' }}>
+                    <p style={{ fontSize: '12px', color: '#6B7280', margin: 0, lineHeight: '1.3' }}>
                       Daily, weekly, and monthly sales breakdown — know where profits are coming from.
                     </p>
                   </div>
@@ -614,8 +619,8 @@ function App() {
                   <div style={{
                     backgroundColor: '#FFFFFF',
                     border: '1px solid #E5E7EB',
-                    borderRadius: '12px',
-                    padding: '24px',
+                    borderRadius: '8px',
+                    padding: '14px',
                     textAlign: 'left',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
@@ -630,39 +635,39 @@ function App() {
                     e.currentTarget.style.transform = 'translateY(0)';
                   }}>
                     <div style={{
-                      width: '48px',
-                      height: '48px',
+                      width: '36px',
+                      height: '36px',
                       backgroundColor: '#F3E8FF',
-                      borderRadius: '12px',
+                      borderRadius: '8px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginBottom: '16px',
-                      fontSize: '24px'
+                      marginBottom: '10px',
+                      fontSize: '18px'
                     }}>
                       📈
                     </div>
-                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '4px' }}>
                       Trend Alerts
                     </h3>
-                    <p style={{ fontSize: '14px', color: '#6B7280', margin: 0, lineHeight: '1.5' }}>
+                    <p style={{ fontSize: '12px', color: '#6B7280', margin: 0, lineHeight: '1.3' }}>
                       AI highlights shifts in order volume, repeat rates, or service demand before you notice.
                     </p>
                   </div>
                 </div>
 
                 {/* Additional Feature Card - Full Width */}
-                <div style={{
+                {/* <div style={{
                   backgroundColor: '#FFFFFF',
                   border: '1px solid #E5E7EB',
-                  borderRadius: '12px',
-                  padding: '24px',
+                  borderRadius: '10px',
+                  padding: '18px',
                   textAlign: 'left',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-                  marginBottom: '32px',
-                  maxWidth: '600px',
+                  marginBottom: '24px',
+                  maxWidth: '460px',
                   marginLeft: 'auto',
                   marginRight: 'auto'
                 }}
@@ -674,30 +679,30 @@ function App() {
                   e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
                   e.currentTarget.style.transform = 'translateY(0)';
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
                     <div style={{
-                      width: '48px',
-                      height: '48px',
+                      width: '40px',
+                      height: '40px',
                       backgroundColor: '#FEF3C7',
-                      borderRadius: '12px',
+                      borderRadius: '10px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       flexShrink: 0,
-                      fontSize: '24px'
+                      fontSize: '20px'
                     }}>
                       🧾
                     </div>
                     <div>
-                      <h3 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px', margin: 0 }}>
+                      <h3 style={{ fontSize: '15px', fontWeight: '600', color: '#111827', marginBottom: '6px', margin: 0 }}>
                         Billing & Disputes
                       </h3>
-                      <p style={{ fontSize: '14px', color: '#6B7280', margin: '4px 0 0 0', lineHeight: '1.5' }}>
+                      <p style={{ fontSize: '13px', color: '#6B7280', margin: '4px 0 0 0', lineHeight: '1.4' }}>
                         Track pending payments, disputed charges, and auto-generated invoices.
                       </p>
                     </div>
                   </div>
-                </div>
+                </div> */}
 
                 {/* Features Footer */}
                 <div style={{
@@ -721,12 +726,12 @@ function App() {
                     </svg>
                     Lightning Fast
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {/* <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <svg style={{ width: '16px', height: '16px', color: '#3B82F6' }} fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M7 2a1 1 0 011 1v1h3a1 1 0 110 2H9.578a18.87 18.87 0 01-1.724 4.78c.29.354.596.696.914 1.026a1 1 0 11-1.44 1.389c-.188-.196-.373-.396-.554-.6a19.098 19.098 0 01-3.107 3.567 1 1 0 01-1.334-1.49 17.087 17.087 0 003.13-3.733 18.992 18.992 0 01-1.487-2.494 1 1 0 111.79-.89c.234.47.489.928.764 1.372.417-.934.752-1.913.997-2.927H3a1 1 0 110-2h3V3a1 1 0 011-1zm6 6a1 1 0 01.894.553l2.991 5.982a.869.869 0 01.02.037l.99 1.98a1 1 0 11-1.79.895L15.383 16h-4.764l-.724 1.447a1 1 0 11-1.788-.894l.99-1.98.019-.038 2.99-5.982A1 1 0 0113 8zm-1.382 6h2.764L13 11.236 11.618 14z" clipRule="evenodd" />
                     </svg>
                     Multi-language
-                  </div>
+                  </div> */}
                 </div>
               </div>
             </div>

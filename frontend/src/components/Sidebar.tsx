@@ -421,7 +421,7 @@ export default function Sidebar({
                         color: '#9CA3AF',
                         margin: 0
                       }}>
-                        {conversation.messages.length} message{conversation.messages.length !== 1 ? 's' : ''}
+                        {conversation.messageCount !== undefined ? conversation.messageCount : conversation.messages.length} message{((conversation.messageCount !== undefined ? conversation.messageCount : conversation.messages.length) !== 1) ? 's' : ''}
                       </p>
                     </div>
                     <button
