@@ -161,6 +161,13 @@ function App() {
   }, [messages]);
 
   const handleSendMessage = async (content: string) => {
+    // Check if user has sufficient tokens (minimum 1,000 tokens required to start)
+    const MIN_TOKEN_THRESHOLD = 1000;
+    if (tokenBalance !== null && tokenBalance < MIN_TOKEN_THRESHOLD) {
+      // Don't use alert - will show error in chat if needed
+      return;
+    }
+
     // Create new conversation if none exists
     let conversationId = currentConversationId;
     if (!conversationId) {
@@ -231,6 +238,25 @@ function App() {
             return;
           }
         }
+
+        // Handle insufficient tokens error
+        if (response.status === 402) {
+          try {
+            const errorData = await response.json();
+            console.log('Insufficient tokens:', errorData);
+            alert(errorData.message || 'Insufficient tokens to process this request. Please contact support to top up.');
+
+            // Update token balance from error response
+            if (errorData.tokenBalance !== undefined) {
+              setTokenBalance(errorData.tokenBalance);
+            }
+            return;
+          } catch (e) {
+            alert('Insufficient tokens to process this request. Please contact support to top up.');
+            return;
+          }
+        }
+
         throw new Error('Failed to get response');
       }
 
@@ -398,6 +424,21 @@ function App() {
                     : msg
                 );
                 updateConversation(conversationId, currentMessages);
+              } else if (data.type === 'insufficient_tokens_error') {
+                // Handle insufficient tokens error - display as error message in chat
+                const errorMessage: Message = {
+                  id: data.id || (Date.now() + 1).toString(),
+                  content: `⚠️ **Insufficient Tokens**\n\n${data.message}`,
+                  role: 'assistant',
+                  timestamp: data.timestamp || new Date().toISOString(),
+                };
+                currentMessages = [...currentMessages, errorMessage];
+                updateConversation(conversationId, currentMessages);
+
+                // Update token balance if provided
+                if (data.tokenBalance !== undefined) {
+                  setTokenBalance(data.tokenBalance);
+                }
               } else if (data.type === 'token_update') {
                 // Update token balance from backend
                 if (data.newBalance !== undefined) {
@@ -796,7 +837,11 @@ function App() {
         {/* Input */}
         <div className="border-t border-gray-200 bg-white flex-shrink-0">
           <div className="max-w-3xl mx-auto w-full px-4">
-            <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
+            <ChatInput
+              onSendMessage={handleSendMessage}
+              disabled={isLoading || (tokenBalance !== null && tokenBalance < 1000)}
+              tokenBalance={tokenBalance}
+            />
           </div>
         </div>
       </div>

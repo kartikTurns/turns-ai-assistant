@@ -240,12 +240,16 @@ app.post('/api/chat', async (req, res) => {
   }
 
   // Check token balance before processing
+  // Minimum threshold to ensure user has at least some tokens
+  const MIN_TOKEN_THRESHOLD = 1000; // Require at least 1,000 tokens to start
   const tokenBalance = await tokenService.getTokenBalance(business_id);
-  if (tokenBalance !== null && tokenBalance <= 0) {
+
+  if (tokenBalance !== null && tokenBalance < MIN_TOKEN_THRESHOLD) {
     return res.status(402).json({
       error: 'Insufficient tokens',
-      message: 'Your token balance is 0. Please contact support to top up.',
-      tokenBalance: 0
+      message: `Your token balance is too low (${tokenBalance.toLocaleString()} tokens remaining). You need at least ${MIN_TOKEN_THRESHOLD.toLocaleString()} tokens to send a message. Please contact support to top up.`,
+      tokenBalance: tokenBalance,
+      requiredBalance: MIN_TOKEN_THRESHOLD
     });
   }
 
@@ -262,7 +266,7 @@ app.post('/api/chat', async (req, res) => {
     const messageId = Date.now().toString();
     const timestamp = new Date().toISOString();
 
-    await handleConversationWithTools(message, conversationHistory, res, messageId, timestamp, access_token, business_id);
+    await handleConversationWithTools(message, conversationHistory, res, messageId, timestamp, access_token, business_id, tokenBalance);
 
   } catch (error) {
     console.error('Error calling Claude API:', error);
@@ -283,7 +287,8 @@ async function handleConversationWithTools(
   messageId: string,
   timestamp: string,
   accessToken?: string,
-  businessId?: string
+  businessId?: string,
+  initialTokenBalance?: number | null
 ) {
   // Prepare messages for Claude API
   interface ClaudeMessage {
@@ -505,11 +510,35 @@ async function handleConversationWithTools(
     const usage = (response as any).usage;
     if (usage) {
       const iterationTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
+      const inputTokens = usage.input_tokens || 0;
       totalTokensUsed += iterationTokens;
 
       if (TOOL_CONFIG.LOGGING.LOG_TOOL_CALLS) {
-        console.log(`🎯 Tokens - Input: ${usage.input_tokens || 0}, Output: ${usage.output_tokens || 0}, Total: ${iterationTokens}`);
+        console.log(`🎯 Tokens - Input: ${inputTokens}, Output: ${usage.output_tokens || 0}, Total: ${iterationTokens}`);
         console.log(`💰 Session total tokens: ${totalTokensUsed}`);
+      }
+
+      // Check if input tokens exceed user's balance
+      if (initialTokenBalance !== null && initialTokenBalance !== undefined && inputTokens > initialTokenBalance) {
+        console.warn(`⚠️ Input tokens (${inputTokens}) exceed user balance (${initialTokenBalance})`);
+
+        // Send error message to user to display in chat
+        res.write(`data: ${JSON.stringify({
+          type: 'insufficient_tokens_error',
+          error: 'Insufficient tokens',
+          message: `This request requires ${inputTokens.toLocaleString()} tokens, but you only have ${initialTokenBalance.toLocaleString()} tokens remaining. Please contact support to top up your balance.`,
+          inputTokens: inputTokens,
+          tokenBalance: initialTokenBalance,
+          id: messageId,
+          timestamp: timestamp
+        })}\n\n`);
+
+        // End the conversation immediately
+        res.write(`data: ${JSON.stringify({ type: 'done', id: messageId, timestamp })}\n\n`);
+        res.end();
+
+        // Don't deduct any tokens since the request shouldn't have been processed
+        return;
       }
     }
 

@@ -522,18 +522,29 @@ export default function Sidebar({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '10px 12px',
-          backgroundColor: '#FFFFFF',
+          backgroundColor: tokenBalance !== null && tokenBalance < 1000 ? '#FEE2E2' : '#FFFFFF',
           borderRadius: '8px',
           marginBottom: '10px',
-          border: '1px solid #E5E7EB'
+          border: `1px solid ${tokenBalance !== null && tokenBalance < 1000 ? '#FCA5A5' : '#E5E7EB'}`
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '16px' }}>⚡</span>
+            <span style={{ fontSize: '16px' }}>{tokenBalance !== null && tokenBalance < 1000 ? '⚠️' : '⚡'}</span>
             <span style={{ fontSize: '13px', fontWeight: '500', color: '#6B7280' }}>Credits</span>
           </div>
-          <span style={{ fontSize: '14px', fontWeight: '700', color: '#FD390E' }}>
-            {tokenBalance !== null ? tokenBalance.toLocaleString() : '...'}
-          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            <span style={{
+              fontSize: '14px',
+              fontWeight: '700',
+              color: tokenBalance !== null && tokenBalance < 1000 ? '#DC2626' : '#FD390E'
+            }}>
+              {tokenBalance !== null ? tokenBalance.toLocaleString() : '...'}
+            </span>
+            {tokenBalance !== null && tokenBalance < 1000 && (
+              <span style={{ fontSize: '10px', color: '#DC2626', fontWeight: '500' }}>
+                Low balance!
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Version Info */}

@@ -3,11 +3,13 @@ import React, { useState, useRef, useEffect } from 'react';
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
   disabled?: boolean;
+  tokenBalance?: number | null;
 }
 
 export default function ChatInput({
   onSendMessage,
-  disabled = false
+  disabled = false,
+  tokenBalance = null
 }: ChatInputProps) {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,6 +72,13 @@ export default function ChatInput({
     setMessage(e.target.value);
   };
 
+  // Check if tokens are too low
+  const MIN_TOKEN_THRESHOLD = 1000;
+  const hasLowTokens = tokenBalance !== null && tokenBalance < MIN_TOKEN_THRESHOLD;
+  const placeholderText = hasLowTokens
+    ? `Insufficient tokens (${tokenBalance?.toLocaleString()} remaining). You need at least ${MIN_TOKEN_THRESHOLD.toLocaleString()} tokens to send a message.`
+    : "Ask me anything... I'm here to help!";
+
   return (
     <div style={{
       borderTop: '1px solid #E5E7EB',
@@ -97,7 +106,7 @@ export default function ChatInput({
                 value={message}
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask me anything... I'm here to help!"
+                placeholder={placeholderText}
                 disabled={disabled || isSubmitting}
                 rows={1}
                 style={{
@@ -199,16 +208,35 @@ export default function ChatInput({
             </div>
           </div>
 
-          {/* Disclaimer */}
-          <p style={{
-            fontSize: '11px',
-            color: '#9CA3AF',
-            textAlign: 'center',
-            margin: '8px 0 0 0',
-            lineHeight: '1.4'
-          }}>
-            TurnsIQ can make mistakes. Consider checking important information.
-          </p>
+          {/* Disclaimer or Warning */}
+          {hasLowTokens ? (
+            <div style={{
+              fontSize: '12px',
+              color: '#DC2626',
+              backgroundColor: '#FEE2E2',
+              textAlign: 'center',
+              margin: '8px 0 0 0',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              lineHeight: '1.4',
+              fontWeight: '500',
+              border: '1px solid #FCA5A5'
+            }}>
+              ⚠️ Insufficient tokens! You have {tokenBalance?.toLocaleString()} tokens remaining.
+              You need at least {MIN_TOKEN_THRESHOLD.toLocaleString()} tokens to send a message.
+              Please contact support to top up your balance.
+            </div>
+          ) : (
+            <p style={{
+              fontSize: '11px',
+              color: '#9CA3AF',
+              textAlign: 'center',
+              margin: '8px 0 0 0',
+              lineHeight: '1.4'
+            }}>
+              TurnsIQ can make mistakes. Consider checking important information.
+            </p>
+          )}
         </div>
       </form>
     </div>
