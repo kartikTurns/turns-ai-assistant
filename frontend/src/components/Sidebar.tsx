@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Conversation } from '../types';
 
 interface SidebarProps {
@@ -21,6 +21,22 @@ export default function Sidebar({
   onToggleCollapse
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [businessId, setBusinessId] = useState('User');
+
+  useEffect(() => {
+    // Get business ID from localStorage
+    const authParamsJson = localStorage.getItem('claude-auth-params');
+    if (authParamsJson) {
+      try {
+        const authParams = JSON.parse(authParamsJson);
+        if (authParams.businessId) {
+          setBusinessId(authParams.businessId);
+        }
+      } catch (error) {
+        console.error('Error parsing auth params:', error);
+      }
+    }
+  }, []);
 
   const getGroupLabel = (dateString: string) => {
     const date = new Date(dateString);
@@ -559,10 +575,10 @@ export default function Sidebar({
               fontSize: '14px',
               fontWeight: '600'
             }}>
-              K
+              {businessId.charAt(0).toUpperCase()}
             </div>
             <div>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: '#111827', lineHeight: 1.2 }}>Kartik</div>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: '#111827', lineHeight: 1.2 }}>{businessId}</div>
               <div style={{ fontSize: '11px', color: '#10B981', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
                 <span style={{ width: '6px', height: '6px', backgroundColor: '#10B981', borderRadius: '50%', display: 'inline-block' }}></span>
                 Online
