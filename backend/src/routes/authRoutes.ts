@@ -54,4 +54,34 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/me', async (req: Request, res: Response) => {
+  try {
+    const businessId = req.businessId!;
+    const user = await userService.getUserByBusinessId(businessId);
+
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+      return;
+    }
+    res.json({
+      success: true,
+      user: { businessId: user.businessId,
+        lastLoginAt: user.lastLoginAt,
+        loginCount: user.metadata.loginCount,
+        createdAt: user.createdAt,
+        tokenBalance: user.tokenBalance }
+    });
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch user',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;
