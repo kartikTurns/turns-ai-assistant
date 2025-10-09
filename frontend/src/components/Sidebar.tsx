@@ -9,6 +9,7 @@ interface SidebarProps {
   onDeleteConversation: (conversationId: string) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  tokenBalance: number | null;
 }
 
 export default function Sidebar({
@@ -18,7 +19,8 @@ export default function Sidebar({
   onNewConversation,
   onDeleteConversation,
   isCollapsed,
-  onToggleCollapse
+  onToggleCollapse,
+  tokenBalance
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [businessId, setBusinessId] = useState('User');
@@ -529,7 +531,9 @@ export default function Sidebar({
             <span style={{ fontSize: '16px' }}>⚡</span>
             <span style={{ fontSize: '13px', fontWeight: '500', color: '#6B7280' }}>Credits</span>
           </div>
-          <span style={{ fontSize: '14px', fontWeight: '700', color: '#FD390E' }}>2,450</span>
+          <span style={{ fontSize: '14px', fontWeight: '700', color: '#FD390E' }}>
+            {tokenBalance !== null ? tokenBalance.toLocaleString() : '...'}
+          </span>
         </div>
 
         {/* Version Info */}

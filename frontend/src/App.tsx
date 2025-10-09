@@ -25,6 +25,7 @@ function App() {
     const saved = localStorage.getItem('sidebarCollapsed');
     return saved ? JSON.parse(saved) : false;
   });
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const loginAttemptedRef = useRef(false); // Track if login was already attempted
 
@@ -131,6 +132,25 @@ function App() {
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', JSON.stringify(isSidebarCollapsed));
   }, [isSidebarCollapsed]);
+
+  // Fetch token balance when auth params are available
+  useEffect(() => {
+    const fetchTokenBalance = async () => {
+      if (authParams.businessId) {
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/user/balance/${authParams.businessId}`);
+          const data = await response.json();
+          if (data.success) {
+            setTokenBalance(data.balance);
+          }
+        } catch (error) {
+          console.error('Error fetching token balance:', error);
+        }
+      }
+    };
+
+    fetchTokenBalance();
+  }, [authParams.businessId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -378,6 +398,12 @@ function App() {
                     : msg
                 );
                 updateConversation(conversationId, currentMessages);
+              } else if (data.type === 'token_update') {
+                // Update token balance from backend
+                if (data.newBalance !== undefined) {
+                  setTokenBalance(data.newBalance);
+                  console.log(`Token balance updated: ${data.tokensUsed} tokens used, new balance: ${data.newBalance.toLocaleString()}`);
+                }
               } else if (data.type === 'done') {
                 // Just mark as done, don't modify content since it's already set
                 currentMessages = currentMessages.map(msg =>
@@ -430,6 +456,7 @@ function App() {
         onDeleteConversation={deleteConversation}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        tokenBalance={tokenBalance}
       />
 
       {/* Main Chat Area */}
